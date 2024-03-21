@@ -25,16 +25,19 @@ from datasets.dataset_val import ImageList_val
 from datasets.dataset_test import ImageList_test
 import math
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-#from losses.CCC import CCC
-#from losses.CCCLoss import CCCLoss
 from losses.loss import CCCLoss
-from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+import pandas as pd
+import traceback
 #import wandb
+from warnings import filterwarnings
+filterwarnings("ignore")
+
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 #wandb.init(settings=wandb.Settings(start_method="fork"), project='Audio Visual Fusion')
 
 args = argparse.ArgumentParser(description='DomainAdaptation')
-args.add_argument('-c', '--config', default=None, type=str,
+args.add_argument('-c', '--config', default="config_file.json", type=str,
 					  help='config file path (default: None)')
 args = args.parse_args()
 configuration = parse_configuration(args.config)
@@ -53,7 +56,7 @@ ValidationAccuracy_A = []
 Logfile_name = "LogFiles/" + "log_file.log"
 logging.basicConfig(filename=Logfile_name, level=logging.INFO)
 
-tb = SummaryWriter()
+# tb = SummaryWriter()
 
 SEED = configuration['SEED']
 ### Using seed for deterministic perfromVisual_model_withI3Dg order
@@ -155,6 +158,10 @@ if not os.path.isdir("SavedWeights"):
 
 path = "SavedWeights"
 
+save_path ="save"
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+
 
 ### Loading audiovisual model
 model_path = '../ABAW2020TNT/aff2model_tntsub4/model2/TSAV_Sub4_544k.pth.tar' # path to the model
@@ -181,6 +188,8 @@ for p in model.children():
 
 ## Fusion model
 fusion_model = CAM().cuda()
+fusion_model = nn.DataParallel(fusion_model)
+fusion_model = fusion_model.cuda()
 
 flag = configuration["Mode"]
 
@@ -196,7 +205,7 @@ if flag == "Testing":
 		param.requires_grad = False
 
 print('==> Preparing data..')
-label_file = '../../SpeechEmotionRec/ratings_gold_standard/ratings_gold_standard/valence/'
+# label_file = '../../SpeechEmotionRec/ratings_gold_standard/ratings_gold_standard/valence/'
 
 
 if flag == "Training":
@@ -245,68 +254,107 @@ optimizer = torch.optim.Adam(fusion_model.parameters(),# filter(lambda p: p.requ
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10, verbose=True)
 
 cnt = 0
+
+init_time = datetime.now()
+init_time = init_time.strftime('%Y%m%d_%H%M%S')
+
+columns = [	"time",
+			"epoch",
+			"best_epoch",
+			"Training_loss",
+			"Valid_loss",
+			"Training_vacc",
+			"Training_aacc",
+			"Valid_vacc",
+			"Valid_aacc"]
+
+init_df = pd.DataFrame(columns=columns)
+init_df.to_csv(f"{save_path}/{init_time}_output.csv", index=False)
+
 for epoch in range(start_epoch, total_epoch):
-	epoch_tic = time.time()
-	#adjust_learning_rate(optimizer, epoch)
-	#adjust_learning_rate(optimizer, epoch)
+	try:
+		epoch_tic = time.time()
+		logging.info("Epoch")
+		logging.info(epoch)
+  
+		# train for one epoch
+		train_tic = time.time()
+		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model)
+		train_toc = time.time()
+		print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
+		logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))
+  
+		val_tic = time.time()
+		Valid_vacc, Valid_aacc, Valid_loss = validate(valloader, model, criterion, epoch, fusion_model)
+		val_toc = time.time()
+		print("Val phase took {:.1f} seconds".format(val_toc - val_tic))
+		logging.info("Val phase took {:.1f} seconds".format(val_toc - val_tic))
+  
+		gc.collect()
+		TrainingAccuracy_V.append(Training_vacc)
+		TrainingAccuracy_A.append(Training_aacc)
+		ValidationAccuracy_V.append(Valid_vacc)
+		ValidationAccuracy_A.append(Valid_aacc)
 
-	logging.info("Epoch")
-	logging.info(epoch)
-	#if cnt == 0:
-	# train for one epoch
-	train_tic = time.time()
-	Training_vacc, Training_aacc = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model)
-	train_toc = time.time()
-	print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
-	logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))
-	#tb.add_scalar("Train Loss", TrainLoss)
-	tb.add_scalar("Training_vacc", Training_vacc)
-	tb.add_scalar("Training_aacc", Training_aacc)
-	#cnt = cnt + 1
-	# evaluate on validation set
-	#Training_acc = 0.0
-	val_tic = time.time()
-	Valid_vacc, Valid_aacc = validate(valloader, model, criterion, epoch, fusion_model)
-	val_toc = time.time()
-	print("Val phase took {:.1f} seconds".format(val_toc - val_tic))
-	logging.info("Val phase took {:.1f} seconds".format(val_toc - val_tic))
-	#tb.add_scalar("ValidLoss", ValidLoss)
-	tb.add_scalar("Valid_vacc", Valid_vacc)
-	tb.add_scalar("Valid_aacc", Valid_aacc)
-	gc.collect()
-	#Test(PrivateTestloader , original_model, criterion, epoch)
-	TrainingAccuracy_V.append(Training_vacc)
-	TrainingAccuracy_A.append(Training_aacc)
-	ValidationAccuracy_V.append(Valid_vacc)
-	ValidationAccuracy_A.append(Valid_aacc)
+		logging.info('TrainingAccuracy:')
+		logging.info(TrainingAccuracy_V)
+		logging.info(TrainingAccuracy_A)
 
-	logging.info('TrainingAccuracy:')
-	logging.info(TrainingAccuracy_V)
-	logging.info(TrainingAccuracy_A)
+		logging.info('ValidationAccuracy:')
+		logging.info(ValidationAccuracy_V)
+		logging.info(ValidationAccuracy_A)
 
-	logging.info('ValidationAccuracy:')
-	logging.info(ValidationAccuracy_V)
-	logging.info(ValidationAccuracy_A)
-
-	if (Valid_vacc + Valid_aacc) > best_Val_acc:
-		print('Saving..')
-		print("best_Val_accV: %0.3f" % Valid_vacc)
-		print("best_Val_accA: %0.3f" % Valid_aacc)
-		state = {
-			'net': fusion_model.state_dict() ,
-			'best_Val_accV': Valid_vacc,
-   			'best_Val_accA': Valid_aacc,
-			'best_Val_acc_epoch': epoch,
-		}
-		if not os.path.isdir(path):
-			os.mkdir(path)
-		torch.save(state, os.path.join(path,'cam_model.pt'))
-		best_Val_acc = Valid_vacc + Valid_aacc
-		best_Val_acc_epoch = epoch
-	epoch_toc = time.time()
-	print("Epoch {}/{} took {:.1f} seconds".format(epoch, total_epoch, epoch_toc - epoch_tic))
-tb.close()
-#print("best_PublicTest_acc: %0.3f" % best_PublicTest_acc)
-#print("best_PublicTest_acc_epoch: %d" % best_PublicTest_acc_epoch)
-print("best_PrivateTest_acc: %0.3f" % best_Val_acc)
-print("best_PrivateTest_acc_epoch: %d" % best_Val_acc_epoch)
+		if (Valid_vacc + Valid_aacc) > best_Val_acc:
+			print('Saving..')
+			print("best_Val_accV: %0.3f" % Valid_vacc)
+			print("best_Val_accA: %0.3f" % Valid_aacc)
+			state = {
+				'net': fusion_model.state_dict() ,
+				'best_Val_accV': Valid_vacc,
+				'best_Val_accA': Valid_aacc,
+				'best_Val_acc_epoch': epoch,
+			}
+			if not os.path.isdir(path):
+				os.mkdir(path)
+			torch.save(state, os.path.join(path,'cam_model.pt'))
+			best_Val_acc = Valid_vacc + Valid_aacc
+			best_Val_acc_epoch = epoch
+		epoch_toc = time.time()
+		print("Epoch {}/{} took {:.1f} seconds".format(epoch, total_epoch, epoch_toc - epoch_tic))
+	
+	
+		now = datetime.now() 
+		record_time = now.strftime('%Y%m%d_%H%M%S')
+		epoch = epoch
+		best_epoch = best_Val_acc
+		Training_loss = f"{Training_loss:.4f}"
+		Valid_loss = f"{Valid_loss:.4f}"
+		Training_vacc = f"{Training_vacc:.4f}"
+		Training_aacc = f"{Training_aacc:.4f}"
+		Valid_vacc = f"{Valid_vacc:.4f}"
+		Valid_aacc = f"{Valid_aacc:.4f}"
+		
+		csv_data = [record_time, 
+					epoch,
+					best_epoch,
+					Training_loss,
+					Valid_loss,
+					Training_vacc,
+					Training_aacc,
+					Valid_vacc,
+					Valid_aacc]
+		
+		df = pd.DataFrame([csv_data], columns=columns)
+		df.to_csv(f"{save_path}/{init_time}_output.csv", mode='a', header=False, index=False)
+	
+		
+		# tb.close()
+		#print("best_PublicTest_acc: %0.3f" % best_PublicTest_acc)
+		#print("best_PublicTest_acc_epoch: %d" % best_PublicTest_acc_epoch)
+		print("best_PrivateTest_acc: %0.3f" % best_Val_acc)
+		print("best_PrivateTest_acc_epoch: %d" % best_Val_acc_epoch)
+	except Exception as e:
+		print(traceback.format_exc())
+		if epoch == start_epoch:
+			os.system(f"rm -rf {save_path}/{init_time}_output.csv")
+		exit()
