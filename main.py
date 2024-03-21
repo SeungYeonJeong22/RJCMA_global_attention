@@ -33,6 +33,8 @@ from torch.utils.tensorboard import SummaryWriter
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 #wandb.init(settings=wandb.Settings(start_method="fork"), project='Audio Visual Fusion')
 
+from sklearn.model_selection import KFold
+
 args = argparse.ArgumentParser(description='DomainAdaptation')
 args.add_argument('-c', '--config', default=None, type=str,
 					  help='config file path (default: None)')
@@ -157,8 +159,9 @@ path = "SavedWeights"
 
 
 ### Loading audiovisual model
-model_path = '../ABAW2020TNT/aff2model_tntsub4/model2/TSAV_Sub4_544k.pth.tar' # path to the model
-model = TwoStreamAuralVisualModel(num_channels=4)
+model_path = 'ABAW2020TNT/model2/TSAV_Sub4_544k.pth.tar' # path to the model
+model = TwoStreamAuralVisualModel(num_channels=4) # channel = 기존 모델에서 이미 4로 쓰여있어서 고정일듯
+# model = nn.DataParallel(model)
 saved_model = torch.load(model_path)
 model.load_state_dict(saved_model['state_dict'])
 model = model.to('cuda')
@@ -180,7 +183,9 @@ for p in model.children():
 	p.train(False)
 
 ## Fusion model
-fusion_model = CAM().cuda()
+fusion_model = CAM()
+fusion_model = nn.DataParallel(fusion_model)
+fusion_model = fusion_model.cuda()
 
 flag = configuration["Mode"]
 
@@ -244,6 +249,16 @@ optimizer = torch.optim.Adam(fusion_model.parameters(),# filter(lambda p: p.requ
 
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10, verbose=True)
 
+from datetime import datetime
+
+now = datetime.now()
+now_date = now.strftime('%Y%m%d_%H%M%S')
+
+save_path = "./save/"
+save_csv_name = save_path + now_date
+
+import pandas as pd
+
 cnt = 0
 for epoch in range(start_epoch, total_epoch):
 	epoch_tic = time.time()
@@ -252,8 +267,11 @@ for epoch in range(start_epoch, total_epoch):
 
 	logging.info("Epoch")
 	logging.info(epoch)
-	#if cnt == 0:
 	# train for one epoch
+ 
+	# KFold()
+ 
+ 
 	train_tic = time.time()
 	Training_vacc, Training_aacc = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model)
 	train_toc = time.time()
@@ -262,9 +280,8 @@ for epoch in range(start_epoch, total_epoch):
 	#tb.add_scalar("Train Loss", TrainLoss)
 	tb.add_scalar("Training_vacc", Training_vacc)
 	tb.add_scalar("Training_aacc", Training_aacc)
-	#cnt = cnt + 1
+ 
 	# evaluate on validation set
-	#Training_acc = 0.0
 	val_tic = time.time()
 	Valid_vacc, Valid_aacc = validate(valloader, model, criterion, epoch, fusion_model)
 	val_toc = time.time()
@@ -287,7 +304,13 @@ for epoch in range(start_epoch, total_epoch):
 	logging.info('ValidationAccuracy:')
 	logging.info(ValidationAccuracy_V)
 	logging.info(ValidationAccuracy_A)
+ 
 
+	log_df = pd.DataFrame()
+ 
+	# column = time, epoch, best_epoch, lr, train_loss, valid_loss, train_acc_a, train_acc_v, valid_acc_a, valid_acc_v
+	csv_columns = ["time", "epoch", "best_epoch", "lr", "train_loss", "valid_loss", "train_acc_a", "train_acc_v", "valid_acc_a", "valid_acc_v"]
+ 
 	if (Valid_vacc + Valid_aacc) > best_Val_acc:
 		print('Saving..')
 		print("best_Val_accV: %0.3f" % Valid_vacc)
