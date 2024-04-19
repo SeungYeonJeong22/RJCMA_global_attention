@@ -25,14 +25,16 @@ class CAM(nn.Module):
         #self.encoder1 = nn.Linear(512, 256)
         #self.encoder2 = nn.Linear(512, 256)
         self.video_attn = BottomUpExtract(512, 512)
-        self.vregressor = nn.Sequential(nn.Linear(512, 128),
+        self.vregressor = nn.Sequential(nn.Linear(1024, 128),
+                                        # nn.Linear(512, 128),
                                         nn.ReLU(inplace=True),
                                      nn.Dropout(0.6),
                                  nn.Linear(128, 1))
 
      
 
-        self.aregressor = nn.Sequential(nn.Linear(512, 128),
+        self.aregressor = nn.Sequential(nn.Linear(1024, 128),
+                                        # nn.Linear(512, 128),
                                         nn.ReLU(inplace=True),
                                      nn.Dropout(0.6),
                                  nn.Linear(128, 1))

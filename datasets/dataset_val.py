@@ -25,16 +25,17 @@ def get_filename(n):
 	filename, ext = os.path.splitext(os.path.basename(n))
 	return filename
 
-def default_seq_reader(videoslist, win_length, stride, dilation, wavs_list):
+def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wavs_list):
 	shift_length = stride #length-1
 	sequences = []
-	csv_data_list = os.listdir(videoslist)#[:2]
+	# csv_data_list = os.listdir(videoslist)#[:2]
+	csv_data_list = videoslist
 	print("Number of Sequences: " + str(len(set(csv_data_list))))
 	for video in csv_data_list:
 		#video = 'video74_right.csv'
 		if video.startswith('.'):
 			continue
-		vid_data = pd.read_csv(os.path.join(videoslist,video))
+		vid_data = pd.read_csv(os.path.join(label_path, video))
 		video_data = vid_data.to_dict("list")
 		images = video_data['img']
 		labels_V = video_data['V']
@@ -55,36 +56,21 @@ def default_seq_reader(videoslist, win_length, stride, dilation, wavs_list):
 		else:
 			wav_file_path = os.path.join(wavs_list, f_name)
 			vidname = f_name
-		#label_array = np.asarray(labels_V, dtype=np.float32)
-		#medfiltered_labels = signal.medfilt(label_array)
-		vid = np.asarray(list(zip(images, label_arrayV, label_arrayA, frameid_array)))
-		#f = open(timestamp_file)
-		#time_lines = f.readlines()
 
-		time_filename = os.path.join('../../Datasets/Affwild2/realtimestamps_orig', vidname) + '_video_ts.txt'
+		vid = np.asarray(list(zip(images, label_arrayV, label_arrayA, frameid_array)))
+		time_filename = os.path.join('../data/realtimestamps', vidname) + '_video_ts.txt'
 		f = open(os.path.join(time_filename))
 		lines = f.readlines()[1:]
-		length = len(lines) #len(os.listdir(wav_file_path))
+		length = len(lines) 
+
 		end = 481
 		start = end -win_length
-		#start = 0 #end - win_length
-		#end = start + win_length
 		counter = 0
 		cnt = 0
 		result = []
-		#if end < length:
 		while end < length + 482:
 			avail_seq_length = end -start
-			#sequence_length = win_length / dilation
-			# Extracting the indices between the start and start + 128 (sequence length)
-			#indices = np.arange(start, end, dilation) + (dilation -1)
-			#indices = np.arange(math.ceil(sequence_length))
-			#indices = np.flip(end - dilation*(np.arange(math.ceil(sequence_length))))
-			#frame_id = frameid_array[indices]
-			#print(frame_id)
-			#indices = np.where((frameid_array>=start+1) & (frameid_array<=end))[0]
 			count = 15
-			#subseq_indices_check = []
 			num_samples = 0
 			vis_subsequnces = []
 			aud_subsequnces = []
@@ -196,10 +182,11 @@ def default_list_reader(fileList):
 	return videos
 
 class ImageList_val(data.Dataset):
-	def __init__(self, root, fileList, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=default_seq_reader):
+	def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=default_seq_reader):
 		self.root = root
 		#self.label_path = label_path
 		self.videoslist = fileList #list_reader(fileList)
+		self.label_path = labelPath
 		self.win_length = length
 		#self.time_list = timestmps
 		self.num_subseqs = int(self.win_length / subseq_length)
@@ -207,7 +194,7 @@ class ImageList_val(data.Dataset):
 		self.stride = stride
 		self.dilation = dilation
 		self.subseq_length = int(subseq_length / self.dilation)
-		self.sequence_list = seq_reader(self.videoslist, self.win_length, self.stride, self.dilation, self.wavs_list)
+		self.sequence_list = seq_reader(self.videoslist, self.label_path, self.win_length, self.stride, self.dilation, self.wavs_list)
 		#self.stride = stride
 		self.sample_rate = 44100
 		self.window_size = 20e-3

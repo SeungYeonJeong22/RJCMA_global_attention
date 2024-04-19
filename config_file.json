@@ -1,15 +1,15 @@
 {
-    "dataset_rootpath": "../../Datasets/Affwild2/cropped_aligned/",
-    "dataset_wavspath": "../../Datasets/Affwild2/mkvextracted_audio_samples_shift_1_win_32_refined/",
+    "dataset_rootpath": "../data/Affwild2/resized_cropped_aligned_images_224_224",
+    "dataset_wavspath": "../data/Affwild2/SegmendtedAudioFiles/Shift_1_win_32/",
+    "labelpath": "../data/Affwild2/annotations/preprocessed_VA_annotations/All_Data/",
 	"train_params": {
-        "labelpath": "../../Datasets/Affwild2/annotations/preprocessed_all_labeled_images_new/Train_Set/",
         "flag" : "train",
         "seq_length" : 512,
         "subseq_length" : 32,
         "stride" : 1,
         "dilation": 4,
         "loader_params": {
-            "batch_size": 64,
+            "batch_size": 16,
             "shuffle": false,
             "num_workers": 4,
             "pin_memory": false
@@ -18,14 +18,13 @@
     },
 
     "val_params": {
-        "labelpath": "../../Datasets/Affwild2/annotations/preprocessed_all_images_new/Val_Set/",
         "flag" : "val",
         "seq_length" : 512,
         "subseq_length" : 32,
         "stride" : 1,
         "dilation": 4,
         "loader_params": {
-            "batch_size": 64,
+            "batch_size": 16,
             "shuffle": false,
             "num_workers": 4,
             "pin_memory": false
@@ -33,14 +32,13 @@
         "input_size": [3,224, 224]
     },
     "test_params": {
-        "labelpath": "../../Datasets/Affwild2/annotations/Test_Set/",
         "flag" : "test",
         "seq_length" : 512,
         "subseq_length" : 32,
         "stride" : 1,
         "dilation": 4,
         "loader_params": {
-            "batch_size": 64,
+            "batch_size": 16,
             "shuffle": false,
             "num_workers": 4,
             "pin_memory": false
@@ -53,7 +51,7 @@
         "savedmodelname": "Inception_FS_SourceLabels_UDA_2LR_ce_cb_new",
         "start_epoch": 0,
         "is_train": true,
-        "max_epochs": 50,
+        "max_epochs": 30,
         "lr": 1e-4,
         "export_path": "savedweights",
         "checkpoint_path": "",
@@ -80,6 +78,5 @@
     "model_update_freq": 1,
     "ModeofPred" : 1,
     "learningcurves_name" : "FullSupSource_UDA_2LR_ce_cb_new",
-    "Logfilename" : "FullSource_UDA_2LR_ce_cb_new.log",
-    "SEED" : 0
+    "Logfilename" : "FullSource_UDA_2LR_ce_cb_new.log"
 }

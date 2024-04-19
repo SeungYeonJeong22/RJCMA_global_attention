@@ -101,7 +101,8 @@ def produce_category_csvs():
 						  total_data["V"],total_data["A"]
 		for i in range(len(imgs)):
 			if V[i] != -1 and A[i] != -1:
-				 multi_data.append(total_data.iloc[i, :])
+					multi_data.append(total_data.iloc[i, :])
+     
 		print(len(multi_data))
 		print(len(VA_spec_data))
 	multi_data = pd.DataFrame(multi_data)
