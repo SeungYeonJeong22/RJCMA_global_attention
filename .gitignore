@@ -199,3 +199,8 @@ Affwild2_processed_model2
 *.txt
 *.pyc
 *.log
+
+/runs
+/SavedWeights
+/vggish
+*.out

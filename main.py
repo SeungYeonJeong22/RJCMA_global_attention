@@ -31,6 +31,7 @@ import pandas as pd
 import traceback
 from torch import nn
 #import wandb
+import json
 from warnings import filterwarnings
 filterwarnings("ignore")
 
@@ -261,8 +262,27 @@ def train_val_test_split(root_path, anno_path, seed=0):
 dataset_rootpath = configuration['dataset_rootpath']
 dataset_wavspath = configuration['dataset_wavspath']
 dataset_labelpath = configuration['labelpath']
+# train_set, valid_set, test_set = train_val_test_split(dataset_rootpath, dataset_labelpath, SEED)
 
-train_set, valid_set, test_set = train_val_test_split(dataset_rootpath, dataset_labelpath, SEED)
+def load_partition_set(partition_path, seed):
+	import json
+
+	with open(partition_path, 'r') as f:    
+		seed_data = json.load(f)
+
+	seed_data_train = seed_data[f'seed_{seed}']['Train_Set']
+	seed_data_valid = seed_data[f'seed_{seed}']['Validation_Set']
+	seed_data_test = seed_data[f'seed_{seed}']['Test_Set']
+
+	return seed_data_train, seed_data_valid, seed_data_test
+
+
+partition_path = "../data/Affwild2/seed_data.json"
+ 
+train_set, valid_set, test_set = load_partition_set(partition_path, SEED)
+train_set = [fn + ".csv" for fn in train_set]
+valid_set = [fn + ".csv" for fn in valid_set]
+test_set = [fn + ".csv" for fn in test_set]
 
 if flag == "Training":
 	print("Train Data")
