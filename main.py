@@ -61,8 +61,6 @@ ValidationAccuracy_A = []
 Logfile_name = "LogFiles/" + "log_file.log"
 logging.basicConfig(filename=Logfile_name, level=logging.INFO)
 
-# tb = SummaryWriter()
-
 SEED = args.seed
 ### Using seed for deterministic perfromVisual_model_withI3Dg order
 if (SEED == 0):
@@ -75,6 +73,10 @@ else:
 	torch.backends.cudnn.deterministic = True
 	torch.backends.cudnn.benchmark = False
 	np.random.seed(SEED)
+ 
+time_chk_file = f"./time_chk_seed_{SEED}.txt"
+if os.path.exists(time_chk_file):
+    os.remove(time_chk_file)
 
 class TrainPadSequence:
 	def __call__(self, sorted_batch):
@@ -272,7 +274,11 @@ def load_partition_set(partition_path, seed):
 
 	seed_data_train = seed_data[f'seed_{seed}']['Train_Set']
 	seed_data_valid = seed_data[f'seed_{seed}']['Validation_Set']
-	seed_data_test = seed_data[f'seed_{seed}']['Test_Set']
+	seed_data_test  = seed_data[f'seed_{seed}']['Test_Set']
+ 
+	seed_data_train = [fn + ".csv" for fn in seed_data_train]
+	seed_data_valid = [fn + ".csv" for fn in seed_data_valid]
+	seed_data_test  = [fn + ".csv" for fn in seed_data_test ]
 
 	return seed_data_train, seed_data_valid, seed_data_test
 
@@ -280,9 +286,6 @@ def load_partition_set(partition_path, seed):
 partition_path = "../data/Affwild2/seed_data.json"
  
 train_set, valid_set, test_set = load_partition_set(partition_path, SEED)
-train_set = [fn + ".csv" for fn in train_set]
-valid_set = [fn + ".csv" for fn in valid_set]
-test_set = [fn + ".csv" for fn in test_set]
 
 if flag == "Training":
 	print("Train Data")
@@ -293,7 +296,7 @@ if flag == "Training":
 	traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=train_set, labelPath=dataset_labelpath,
 							audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
 							flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
-							subseq_length = configuration['train_params']['subseq_length'])
+							subseq_length = configuration['train_params']['subseq_length'], seed=SEED)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
 					**configuration['train_params']['loader_params'])
@@ -362,7 +365,7 @@ for epoch in range(start_epoch, total_epoch):
   
 		# train for one epoch
 		train_tic = time.time()
-		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model)
+		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, SEED)
 		train_toc = time.time()
 		print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
 		logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))

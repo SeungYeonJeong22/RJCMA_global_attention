@@ -11,12 +11,15 @@ from datasets.clip_transforms import *
 import pandas as pd
 import utils.videotransforms as videotransforms
 import math
+import gc
+import time
 
 def get_filename(n):
 	filename, ext = os.path.splitext(os.path.basename(n))
 	return filename
 
-def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wavs_list):
+# def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wavs_list):
+def create_jca_seq_data(videoslist, label_path, win_length, stride, dilation, wavs_list):
 	shift_length = stride #length-1
 	sequences = []
 	# csv_data_list = os.listdir(videoslist)
@@ -30,6 +33,13 @@ def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wav
 		if video in skip_vids:
 			continue
 		vid_data = pd.read_csv(os.path.join(label_path,video))
+  
+		# wav file 에러나는 파일만 디렉토리 돌려서 
+		if video=="420.csv" or video=="110.csv":
+			wavs_list = "../data/Affwild2/SegmendtedAudioFiles/Shift_2_win_32/"
+		else:
+			wavs_list = "../data/Affwild2/SegmendtedAudioFiles/Shift_1_win_32/"
+  
 		video_data = vid_data.to_dict("list")
 		images = video_data['img']
 		labels_V = video_data['V']
@@ -53,12 +63,11 @@ def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wav
 		time_filename = os.path.join('../data/realtimestamps', vidname) + '_video_ts.txt'
 		f = open(os.path.join(time_filename))
 		lines = f.readlines()[1:]
-		length = len(lines) #len(os.listdir(wav_file_path))    
-
+		length = len(lines) #len(os.listdir(wav_file_path))
+  
 		end = 481
 		start = end -win_length
 		counter = 0
-		cnt = 0
 		result = []
 		while end < length + 481:
 			avail_seq_length = end -start
@@ -66,6 +75,7 @@ def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wav
 			num_samples = 0
 			vis_subsequnces = []
 			aud_subsequnces = []
+   
 			for i in range(16):
 				sub_indices = np.where((frameid_array>=(start+(i*32))+1) & (frameid_array<=(end -(count*32))))[0]
 				wav_file = os.path.join(wav_file_path, str(end -(count*32))) +'.wav'
@@ -138,7 +148,8 @@ def default_list_reader(fileList):
 	return videos
 
 class ImageList(data.Dataset):
-	def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=default_seq_reader):
+	# def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=default_seq_reader):
+	def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=create_jca_seq_data, seed=0):
 		self.root = root
 		self.videoslist = fileList #list_reader(fileList)
 		self.label_path = labelPath
@@ -159,11 +170,24 @@ class ImageList(data.Dataset):
 		self.audio_shift_samples = int(self.audio_shift_sec * self.sample_rate)
 
 		self.flag = flag
+		self.seed = seed
 
 	def __getitem__(self, index):
 		seq_path, wav_file = self.sequence_list[index]
+		st1 = time.time()
 		seq, label_V, label_A = self.load_vis_data(self.root, seq_path, self.flag, self.subseq_length)
+		ed1 = time.time()
+		st2 = time.time()
 		aud_data = self.load_aud_data(wav_file, self.num_subseqs, self.flag)
+		ed2 = time.time()
+
+		vis_data_time = ed1 - st1
+		aud_data_time = ed2 - st2
+		time_chk_file = f"./time_chk_seed_{self.seed}.txt"
+		with open(time_chk_file, 'a') as f:
+			f.write(f"Time load vis_data: {vis_data_time}\n")
+			f.write(f"Time load aud_data: {aud_data_time}\n")
+		f.close()
 		return seq, aud_data, label_V, label_A#_index
 
 	def __len__(self):
@@ -209,6 +233,8 @@ class ImageList(data.Dataset):
 		targetsV = torch.FloatTensor(labV)
 		targetsA = torch.FloatTensor(labA)
 		vid_seqs = torch.stack(seqs)#.permute(4,0,1,2,3)
+		gc.collect()
+
 		return vid_seqs, targetsV, targetsA # vid_seqs,
 
 	def load_aud_data(self, wav_file, num_subseqs, flag):
