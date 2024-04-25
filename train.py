@@ -50,7 +50,7 @@ total_epoch = 30
 lr = 0.0001
 scaler = torch.cuda.amp.GradScaler()
 
-def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam):
+def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, seed):
 	print('\nEpoch: %d' % epoch)
 	global Train_acc
 	#wandb.watch(audiovisual_model, log_freq=100)
@@ -62,10 +62,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam):
 	cam.train()
 
 	epoch_loss = 0
-	correct = 0
-	total = 0
-	running_loss = 0
-	running_accuracy = 0
 	vout = list()
 	vtar = list()
 
@@ -85,6 +81,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam):
 	#torch.cuda.synchronize()
 	#t1 = time.time()
 	n = 0
+	time_chk_file = f"./time_chk_seed_{seed}.txt"
+
 	for batch_idx, (visualdata, audiodata, labels_V, labels_A) in tqdm(enumerate(train_loader),
 				 										 total=len(train_loader), position=0, leave=True):
 
@@ -92,6 +90,9 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam):
 		audiodata = audiodata.cuda()#.unsqueeze(2)
 
 		visualdata = visualdata.cuda()#permute(0,4,1,2,3).cuda()
+  
+		st2 = time.time()
+
 
 		with torch.cuda.amp.autocast():
 			with torch.no_grad():
@@ -100,12 +101,29 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam):
 				aud_feats = torch.empty((b, seq_t, 512), dtype=visualdata.dtype, device = visualdata.device)
 
 				for i in range(visualdata.shape[0]):
+					st1 = time.time()
 					aud_feat, visualfeat, _ = model(audiodata[i,:,:,:], visualdata[i, :, :, :,:,:])
+					ed1 = time.time()
 
+					pre_trained_model_time = ed1 - st1
+					with open(time_chk_file, 'a') as f:
+						f.write(f"Time pre_trained_model: {pre_trained_model_time}\n")
 					visual_feats[i,:,:] = visualfeat
 					aud_feats[i,:,:] = aud_feat
 
+			st2 = time.time()
 			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
+			ed2 = time.time()
+   
+			time_cam_model= ed2 - st2
+			with open(time_chk_file, 'a') as f:
+				f.write(f"Time cam model: {time_cam_model}\n")
+				f.write(f"Epoch: {epoch}\n")
+				f.write(f"batch_idx: {batch_idx}\n")
+				f.write("----"*20)
+				f.write("\n")
+			f.close()
+
 
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])

@@ -12,7 +12,7 @@ import argparse
 
 
 video_files_dir = '../data/Affwild2/raw_video'
-output_dir = '../data/Affwild2/SegmendtedAudioFiles/Shift_1_win_32'
+output_dir = '../data/Affwild2/SegmendtedAudioFiles/Shift_2_win_32'
 timestamps_dir = '../data/realtimestamps'
 audio_dir = '../data/Affwild2//Audio_files'
 temp_dir = '../data/Affwild2/temp_files'
@@ -102,7 +102,8 @@ def main():
 	print(f"start_range ~ end_range: {start_range} ~ {end_range}")
        
 	video_files = os.listdir(video_files_dir)[int(start_range):int(end_range)]
-
+ 
+	video_files = ['110.avi', '420.mp4']
 	for video in tqdm(video_files):
 		#video = "119.avi"
 		audio_file_name = extract_audio(video)
