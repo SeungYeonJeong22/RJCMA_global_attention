@@ -50,7 +50,7 @@ total_epoch = 30
 lr = 0.0001
 scaler = torch.cuda.amp.GradScaler()
 
-def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, seed):
+def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time_chk_path):
 	print('\nEpoch: %d' % epoch)
 	global Train_acc
 	#wandb.watch(audiovisual_model, log_freq=100)
@@ -81,7 +81,7 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, seed
 	#torch.cuda.synchronize()
 	#t1 = time.time()
 	n = 0
-	time_chk_file = f"./time_chk_seed_{seed}.txt"
+	time_chk_file = os.path.join(time_chk_path, "time_chk.txt")
 
 	for batch_idx, (visualdata, audiodata, labels_V, labels_A) in tqdm(enumerate(train_loader),
 				 										 total=len(train_loader), position=0, leave=True):
@@ -123,7 +123,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, seed
 				f.write("----"*20)
 				f.write("\n")
 			f.close()
-
 
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])

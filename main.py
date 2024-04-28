@@ -73,10 +73,7 @@ else:
 	torch.backends.cudnn.deterministic = True
 	torch.backends.cudnn.benchmark = False
 	np.random.seed(SEED)
- 
-time_chk_file = f"./time_chk_seed_{SEED}.txt"
-if os.path.exists(time_chk_file):
-    os.remove(time_chk_file)
+
 
 class TrainPadSequence:
 	def __call__(self, sorted_batch):
@@ -287,6 +284,14 @@ partition_path = "../data/Affwild2/seed_data.json"
  
 train_set, valid_set, test_set = load_partition_set(partition_path, SEED)
 
+init_time = datetime.now()
+init_time = init_time.strftime('%m%d_%H%M')
+
+root_time_chk_dir = "time_chk"
+time_chk_path = os.path.join(root_time_chk_dir, init_time)
+if not os.path.exists(time_chk_path):
+    os.makedirs(time_chk_path)
+
 if flag == "Training":
 	print("Train Data")
 	# traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=configuration['train_params']['labelpath'],
@@ -296,7 +301,7 @@ if flag == "Training":
 	traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=train_set, labelPath=dataset_labelpath,
 							audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
 							flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
-							subseq_length = configuration['train_params']['subseq_length'], seed=SEED)
+							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
 					**configuration['train_params']['loader_params'])
@@ -338,9 +343,6 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10, verbose
 
 cnt = 0
 
-init_time = datetime.now()
-init_time = init_time.strftime('%m%d_%H%M')
-
 columns = [	"time",
 			"epoch",
 			"best_epoch",
@@ -365,7 +367,7 @@ for epoch in range(start_epoch, total_epoch):
   
 		# train for one epoch
 		train_tic = time.time()
-		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, SEED)
+		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, time_chk_path=time_chk_path)
 		train_toc = time.time()
 		print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
 		logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))
