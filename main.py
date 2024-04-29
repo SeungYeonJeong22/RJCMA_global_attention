@@ -63,20 +63,17 @@ logging.basicConfig(filename=Logfile_name, level=logging.INFO)
 
 SEED = args.seed
 ### Using seed for deterministic perfromVisual_model_withI3Dg order
-if (SEED == 0):
-	cudnn.benchmark = True
-else:
-	print("Using SEED")
-	random.seed(SEED)
-	torch.manual_seed(SEED)
-	torch.cuda.manual_seed(SEED)
-	torch.backends.cudnn.deterministic = True
-	torch.backends.cudnn.benchmark = False
-	np.random.seed(SEED)
- 
-time_chk_file = f"./time_chk_seed_{SEED}.txt"
-if os.path.exists(time_chk_file):
-    os.remove(time_chk_file)
+# if (SEED == 0):
+# 	cudnn.benchmark = True
+# else:
+# 	print("Using SEED")
+random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(SEED)
+
 
 class TrainPadSequence:
 	def __call__(self, sorted_batch):
@@ -287,6 +284,14 @@ partition_path = "../data/Affwild2/seed_data.json"
  
 train_set, valid_set, test_set = load_partition_set(partition_path, SEED)
 
+init_time = datetime.now()
+init_time = init_time.strftime('%m%d_%H%M')
+
+root_time_chk_dir = "time_chk"
+time_chk_path = os.path.join(root_time_chk_dir, init_time)
+if not os.path.exists(time_chk_path):
+    os.makedirs(time_chk_path)
+
 if flag == "Training":
 	print("Train Data")
 	# traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=configuration['train_params']['labelpath'],
@@ -296,10 +301,11 @@ if flag == "Training":
 	traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=train_set, labelPath=dataset_labelpath,
 							audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
 							flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
-							subseq_length = configuration['train_params']['subseq_length'], seed=SEED)
+							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
-					**configuration['train_params']['loader_params'])
+      				batch_size=16, shuffle=False, pin_memory=False)
+     		# **configuration['train_params']['loader_params']
 			#batch_size=64, shuffle=True, collate_fn=TrainPadSequence(),
 			#num_workers=2, pin_memory=True) #, drop_last = True)
 
@@ -310,7 +316,8 @@ if flag == "Training":
 							subseq_length = configuration['val_params']['subseq_length'])
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
-					**configuration['val_params']['loader_params'])
+					batch_size=16, shuffle=False, pin_memory=False)
+					# **configuration['val_params']['loader_params'])
 	print("Number of Train samples:" + str(len(traindataset)))
 	print("Number of Val samples:" + str(len(valdataset)))
 else:
@@ -338,9 +345,6 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10, verbose
 
 cnt = 0
 
-init_time = datetime.now()
-init_time = init_time.strftime('%m%d_%H%M')
-
 columns = [	"time",
 			"epoch",
 			"best_epoch",
@@ -365,7 +369,7 @@ for epoch in range(start_epoch, total_epoch):
   
 		# train for one epoch
 		train_tic = time.time()
-		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, SEED)
+		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, time_chk_path=time_chk_path)
 		train_toc = time.time()
 		print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
 		logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))

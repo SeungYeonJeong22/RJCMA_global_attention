@@ -13,6 +13,7 @@ import utils.videotransforms as videotransforms
 import math
 import gc
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def get_filename(n):
 	filename, ext = os.path.splitext(os.path.basename(n))
@@ -149,7 +150,7 @@ def default_list_reader(fileList):
 
 class ImageList(data.Dataset):
 	# def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=default_seq_reader):
-	def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=create_jca_seq_data, seed=0):
+	def __init__(self, root, fileList, labelPath, audList, length, flag, stride, dilation, subseq_length, list_reader=default_list_reader, seq_reader=create_jca_seq_data, time_chk_path=None):
 		self.root = root
 		self.videoslist = fileList #list_reader(fileList)
 		self.label_path = labelPath
@@ -170,7 +171,7 @@ class ImageList(data.Dataset):
 		self.audio_shift_samples = int(self.audio_shift_sec * self.sample_rate)
 
 		self.flag = flag
-		self.seed = seed
+		self.time_chk_path = time_chk_path
 
 	def __getitem__(self, index):
 		seq_path, wav_file = self.sequence_list[index]
@@ -183,94 +184,115 @@ class ImageList(data.Dataset):
 
 		vis_data_time = ed1 - st1
 		aud_data_time = ed2 - st2
-		time_chk_file = f"./time_chk_seed_{self.seed}.txt"
+		time_chk_file = os.path.join(self.time_chk_path, "time_chk.txt")
+  
 		with open(time_chk_file, 'a') as f:
 			f.write(f"Time load vis_data: {vis_data_time}\n")
 			f.write(f"Time load aud_data: {aud_data_time}\n")
 		f.close()
-		return seq, aud_data, label_V, label_A#_index
+		return seq, aud_data, label_V, label_A #_index
 
 	def __len__(self):
 		return len(self.sequence_list)
 
-	def load_vis_data(self, root, SeqPath, flag, subseq_len):
-		clip_transform = ComposeWithInvert([NumpyToTensor(),
-												 Normalize(mean=[0.43216, 0.394666, 0.37645],
-														   std=[0.22803, 0.22145, 0.216989])])
-		if (flag == 'train'):
-			data_transforms = transforms.Compose([videotransforms.RandomCrop(224),
-										   videotransforms.RandomHorizontalFlip()])
-		else:
-			data_transforms=transforms.Compose([videotransforms.CenterCrop(224)])
-		output = []
-		subseq_inputs = []
-		subseq_labels = []
-		labV = []
-		labA = []
-		frame_ids = []
-		seq_length = math.ceil(self.win_length / self.dilation)
-		seqs = []
-		for clip in SeqPath:
-			images = np.zeros((8, 112, 112, 3), dtype=np.uint8)
-			labelV = -5.0
-			labelA = -5.0
-			for im_index, image in enumerate(clip):
-				imgPath = image[0]
-				labelV = image[1]
-				labelA = image[2]
+	def process_clip(self, root, clip, clip_transform):
+		images = np.zeros((len(clip), 112, 112, 3), dtype=np.uint8)
+		labelV = -5.0
+		labelA = -5.0
 
+		for im_index, image_info in enumerate(clip):
+			img_path, labelV, labelA = image_info
+			try:
+				img = np.array(Image.open(os.path.join(root, img_path)))
+				images[im_index, :, :, :] = img
+			except Exception as e:
+				continue
+
+		# RandomColorAugmentation과 clip_transform 적용
+		images = RandomColorAugmentation(images)
+		imgs = clip_transform(images)
+
+		return imgs, float(labelV), float(labelA)
+
+	def load_vis_data(self, root, SeqPath, flag, subseq_len, max_workers=4):
+		clip_transform = ComposeWithInvert([
+			NumpyToTensor(),
+			Normalize(mean=[0.43216, 0.394666, 0.37645], std=[0.22803, 0.22145, 0.216989])
+		])
+		
+		labV, labA, seqs = [], [], []
+
+		# 각 클립을 병렬로 처리
+		with ThreadPoolExecutor(max_workers=max_workers) as executor:
+			# PID가 죽는 경우가 있어서 최대 5번정도 다시 실행
+			for _ in range(5):
 				try:
-					img = np.array(Image.open(os.path.join(root , imgPath)))
-					images[im_index, :, :, 0:3] = img
-				except:
-					pass
-
-			imgs = clip_transform(RandomColorAugmentation(images))
-			seqs.append(imgs)
-			labV.append(float(labelV))
-			labA.append(float(labelA))
-
+					future_to_clip = {executor.submit(self.process_clip, root, clip, clip_transform): clip for clip in SeqPath}
+					break
+				except:	continue
+			
+			for future in as_completed(future_to_clip):
+				imgs, labelV, labelA = future.result()
+				seqs.append(imgs)
+				labV.append(labelV)
+				labA.append(labelA)
+		
 		targetsV = torch.FloatTensor(labV)
 		targetsA = torch.FloatTensor(labA)
-		vid_seqs = torch.stack(seqs)#.permute(4,0,1,2,3)
-		gc.collect()
+		vid_seqs = torch.stack(seqs)
 
-		return vid_seqs, targetsV, targetsA # vid_seqs,
+		return vid_seqs, targetsV, targetsA
 
-	def load_aud_data(self, wav_file, num_subseqs, flag):
-		transform_spectra = transforms.Compose([
-			transforms.ToPILImage(),
-			transforms.RandomVerticalFlip(1),
-			transforms.ToTensor(),
-		])
+	def process_audio(self, wave, audio_spec_transform):
+		try:
+			audio, sr = torchaudio.load(wave)
+		except Exception as e:
+			audio, sr = torchaudio.load(wave)
+
+		# 오디오 길이 조정
+		if audio.shape[1] <= 45599:
+			_audio = torch.zeros((1, 45599))
+			_audio[:, -audio.shape[1]:] = audio
+			audio = _audio
+
+		# 멜 스펙트로그램 변환
+		audiofeatures = torchaudio.transforms.MelSpectrogram(
+			sample_rate=sr, win_length=882, hop_length=441, n_mels=64, n_fft=1024, window_fn=torch.hann_window)(audio)
+
+		# 정규화 적용
+		audio_feature = audio_spec_transform(audiofeatures)
+
+		return audio_feature, audiofeatures.shape[2]
+
+
+	def load_aud_data(self, wav_file, num_subseqs, flag, max_workers=4):
 		audio_spec_transform = ComposeWithInvert([AmpToDB(), Normalize(mean=[-14.8], std=[19.895])])
 
 		spectrograms = []
 		max_spec_shape = []
-		for wave in wav_file:
-			try:
-				audio, sr = torchaudio.load(wave) #,
-			except:
-				audio, sr = torchaudio.load(wave) #,
-			if audio.shape[1] <= 45599:
-				_audio = torch.zeros((1, 45599))
-				_audio[:, -audio.shape[1]:] = audio
-				audio = _audio
-			audiofeatures = torchaudio.transforms.MelSpectrogram(sample_rate=sr, win_length=882, hop_length=441, n_mels=64,
-												   n_fft=1024, window_fn=torch.hann_window)(audio)
 
-			max_spec_shape.append(audiofeatures.shape[2])
-			audio_feature = audio_spec_transform(audiofeatures)
+		with ThreadPoolExecutor(max_workers=max_workers) as executor:
+			# PID가 죽는 경우가 있어서 최대 5번정도 다시 실행
+			for _ in range(5):
+				try:
+					futures = [executor.submit(self.process_audio, wave, audio_spec_transform) for wave in wav_file]
+					break
+				except:	continue
+			for future in as_completed(futures):
+				audio_feature, spec_shape = future.result()
+				if audio_feature is not None:
+					spectrograms.append(audio_feature)
+					max_spec_shape.append(spec_shape)
 
-			spectrograms.append(audio_feature)
 		spec_dim = max(max_spec_shape)
-
 		audio_features = torch.zeros(len(max_spec_shape), 1, 64, spec_dim)
+
+		# 텐서 조합
 		for batch_idx, spectrogram in enumerate(spectrograms):
 			if spectrogram.shape[2] < spec_dim:
 				audio_features[batch_idx, :, :, -spectrogram.shape[2]:] = spectrogram
 			else:
-				audio_features[batch_idx, :,:, :] = spectrogram
+				audio_features[batch_idx, :, :, :] = spectrogram
 
-		return audio_features # melspecs_scaled
+		return audio_features
 
