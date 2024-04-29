@@ -63,16 +63,16 @@ logging.basicConfig(filename=Logfile_name, level=logging.INFO)
 
 SEED = args.seed
 ### Using seed for deterministic perfromVisual_model_withI3Dg order
-if (SEED == 0):
-	cudnn.benchmark = True
-else:
-	print("Using SEED")
-	random.seed(SEED)
-	torch.manual_seed(SEED)
-	torch.cuda.manual_seed(SEED)
-	torch.backends.cudnn.deterministic = True
-	torch.backends.cudnn.benchmark = False
-	np.random.seed(SEED)
+# if (SEED == 0):
+# 	cudnn.benchmark = True
+# else:
+# 	print("Using SEED")
+random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(SEED)
 
 
 class TrainPadSequence:
@@ -304,7 +304,8 @@ if flag == "Training":
 							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
-					**configuration['train_params']['loader_params'])
+      				batch_size=16, shuffle=False, pin_memory=False)
+     		# **configuration['train_params']['loader_params']
 			#batch_size=64, shuffle=True, collate_fn=TrainPadSequence(),
 			#num_workers=2, pin_memory=True) #, drop_last = True)
 
@@ -315,7 +316,8 @@ if flag == "Training":
 							subseq_length = configuration['val_params']['subseq_length'])
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
-					**configuration['val_params']['loader_params'])
+					batch_size=16, shuffle=False, pin_memory=False)
+					# **configuration['val_params']['loader_params'])
 	print("Number of Train samples:" + str(len(traindataset)))
 	print("Number of Val samples:" + str(len(valdataset)))
 else:
