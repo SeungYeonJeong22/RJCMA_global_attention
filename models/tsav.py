@@ -77,6 +77,7 @@ class TwoStreamAuralVisualModel(nn.Module):
         #clip = x['clip']
         audio_model_features = self.audio_model(audio)
         video_model_features = self.video_model(clip)
-        features = torch.cat([audio_model_features, video_model_features], dim=1)
-        out = self.fc(features)
+        # features = torch.cat([audio_model_features, video_model_features], dim=1)
+        # out = self.fc(features)
+        out = None
         return audio_model_features, video_model_features, out

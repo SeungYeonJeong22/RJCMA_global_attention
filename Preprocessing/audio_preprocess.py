@@ -10,19 +10,32 @@ import subprocess
 from sox import Transformer
 import argparse
 
+
+video_files_dir = '../data/Affwild2/raw_video'
+output_dir = '../data/Affwild2/SegmendtedAudioFiles/Shift_2_win_32'
+timestamps_dir = '../data/realtimestamps'
+audio_dir = '../data/Affwild2//Audio_files'
+temp_dir = '../data/Affwild2/temp_files'
+
 parser = argparse.ArgumentParser(description='Create Configuration')
-parser.add_argument('--data_start_range', type=str, help='optional filename', 
-       default="")
-parser.add_argument('--data_end_range', type=str, help='optional filename', 
-       default="")
+# parser.add_argument('--data_start_range', type=str, help='optional filename', 
+#        default="540")
+# parser.add_argument('--data_end_range', type=str, help='optional filename', 
+#        default=len(os.listdir(video_files_dir)))
+parser.add_argument('--fold', default=0, type=int, help='optional number of video for multi terminal')
 
 args = parser.parse_args()
 
-video_files_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/Video_files'
-output_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/SegmendtedAudioFiles/Shift_1_win_32'
-timestamps_dir = '/misc/lu/bf_scratch/patx/rajasegp/RecurrentJointAttentionwithLSTMs/datasets/realtimestamps'
-audio_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/Audio_files'
-temp_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/temp_files'
+dir_list = [video_files_dir, output_dir, timestamps_dir,audio_dir ,temp_dir]
+for d in dir_list:
+	if not os.path.exists(d):
+		os.makedirs(d)
+
+# video_files_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/Video_files'
+# output_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/SegmendtedAudioFiles/Shift_1_win_32'
+# timestamps_dir = '/misc/lu/bf_scratch/patx/rajasegp/RecurrentJointAttentionwithLSTMs/datasets/realtimestamps'
+# audio_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/Audio_files'
+# temp_dir = '/misc/lu/fast_scratch/patx/rajasegp/Affwild2/Data/temp_files'
 
 def extract_audio(video):
 	if not os.path.isdir(audio_dir):
@@ -68,11 +81,29 @@ def extract_audio(video):
 	return audio_name
 
 def main():
-	start_range = args.data_start_range
-	end_range = args.data_end_range
+	# start_range = args.data_start_range
+	# end_range = args.data_end_range
+	fold = args.fold
+ 
+	len_fold = int(len(os.listdir(video_files_dir)) // 4)
+	if fold == 0:
+		start_range = 0
+		end_range = len_fold
+	elif fold == 1:
+		start_range = len_fold
+		end_range = len_fold * 2
+	elif fold == 2:
+		start_range = len_fold * 2
+		end_range = len_fold * 3
+	elif fold == 3:
+		start_range = len_fold * 3
+		end_range = len_fold * 4
+  
+	print(f"start_range ~ end_range: {start_range} ~ {end_range}")
+       
 	video_files = os.listdir(video_files_dir)[int(start_range):int(end_range)]
-	#video_files = os.listdir(video_files_dir)[0:10]
-
+ 
+	video_files = ['110.avi', '420.mp4']
 	for video in tqdm(video_files):
 		#video = "119.avi"
 		audio_file_name = extract_audio(video)
@@ -100,7 +131,7 @@ def main():
 			st_time = str(datetime.timedelta(seconds=start_time))
 			en_time = str(datetime.timedelta(seconds=end_time))
 			output_file_name = os.path.join(out_file_dir, str(j+1)) + '.wav'
-			mycmd = "ffmpeg -i " + audio_file_name + ' -ss '+ st_time + ' -to ' + en_time +' -ar 44100 -q:a 0 -map a '+ output_file_name
+			mycmd = "ffmpeg -y -i " + audio_file_name + ' -ss '+ st_time + ' -to ' + en_time +' -ar 44100 -q:a 0 -map a '+ output_file_name
 			os.system(mycmd)
 
 if __name__ == "__main__":

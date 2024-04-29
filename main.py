@@ -29,7 +29,13 @@ from losses.loss import CCCLoss
 from datetime import datetime
 import pandas as pd
 import traceback
+<<<<<<< HEAD
 #import wandb
+=======
+from torch import nn
+#import wandb
+import json
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 from warnings import filterwarnings
 filterwarnings("ignore")
 
@@ -39,6 +45,9 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 args = argparse.ArgumentParser(description='DomainAdaptation')
 args.add_argument('-c', '--config', default="config_file.json", type=str,
 					  help='config file path (default: None)')
+args.add_argument('-s', '--seed', default=0, type=int,
+					  help='random seed number (default: 0)')
+
 args = args.parse_args()
 configuration = parse_configuration(args.config)
 
@@ -56,20 +65,25 @@ ValidationAccuracy_A = []
 Logfile_name = "LogFiles/" + "log_file.log"
 logging.basicConfig(filename=Logfile_name, level=logging.INFO)
 
+<<<<<<< HEAD
 # tb = SummaryWriter()
 
 SEED = configuration['SEED']
+=======
+SEED = args.seed
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 ### Using seed for deterministic perfromVisual_model_withI3Dg order
-if (SEED == 0):
-	cudnn.benchmark = True
-else:
-	print("Using SEED")
-	random.seed(SEED)
-	torch.manual_seed(SEED)
-	torch.cuda.manual_seed(SEED)
-	torch.backends.cudnn.deterministic = True
-	torch.backends.cudnn.benchmark = False
-	np.random.seed(SEED)
+# if (SEED == 0):
+# 	cudnn.benchmark = True
+# else:
+# 	print("Using SEED")
+random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(SEED)
+
 
 class TrainPadSequence:
 	def __call__(self, sorted_batch):
@@ -156,19 +170,26 @@ class TestPadSequence:
 if not os.path.isdir("SavedWeights"):
 	os.makedirs("SavedWeights", exist_ok=True)
 
-path = "SavedWeights"
+weight_save_path = "SavedWeights"
 
+<<<<<<< HEAD
 save_path ="save"
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
+=======
+result_save_path ="save"
+if not os.path.exists(result_save_path):
+    os.makedirs(result_save_path)
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 ### Loading audiovisual model
-model_path = '../ABAW2020TNT/aff2model_tntsub4/model2/TSAV_Sub4_544k.pth.tar' # path to the model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+model_path = 'ABAW2020TNT/model2/TSAV_Sub4_544k.pth.tar' # path to the model
 model = TwoStreamAuralVisualModel(num_channels=4)
 saved_model = torch.load(model_path)
 model.load_state_dict(saved_model['state_dict'])
-model = model.to('cuda')
 
 new_first_layer = nn.Conv3d(in_channels=3,
 					out_channels=model.video_model.r2plus1d.stem[0].out_channels,
@@ -179,6 +200,8 @@ new_first_layer = nn.Conv3d(in_channels=3,
 
 new_first_layer.weight.data = model.video_model.r2plus1d.stem[0].weight.data[:, 0:3]
 model.video_model.r2plus1d.stem[0] = new_first_layer
+model = nn.DataParallel(model)
+model = model.to(device)
 
 ### Freezing the model
 for p in model.parameters():
@@ -187,9 +210,17 @@ for p in model.children():
 	p.train(False)
 
 ## Fusion model
+<<<<<<< HEAD
 fusion_model = CAM().cuda()
 fusion_model = nn.DataParallel(fusion_model)
 fusion_model = fusion_model.cuda()
+=======
+# fusion_model = CAM().cuda()
+fusion_model = CAM()
+fusion_model = nn.DataParallel(fusion_model)
+# fusion_model.cuda()
+fusion_model = fusion_model.to(device=device)
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 flag = configuration["Mode"]
 
@@ -205,34 +236,120 @@ if flag == "Testing":
 		param.requires_grad = False
 
 print('==> Preparing data..')
+<<<<<<< HEAD
 # label_file = '../../SpeechEmotionRec/ratings_gold_standard/ratings_gold_standard/valence/'
+=======
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
+
+def matching_files(root_path, anno_path):
+	anno_list = []
+	for f in os.listdir(anno_path):
+		anno_list.append(f.split(".")[0])
+  
+	root_path_list = os.listdir(root_path)
+	
+	for f in os.listdir(root_path):
+		if not f in anno_list:
+			del root_path_list[root_path_list.index(f)]
+
+	return root_path_list
+
+def train_val_test_split(root_path, anno_path, seed=0):
+	random.seed(seed)
+	trial_data = matching_files(root_path, anno_path)
+ 
+	fname_dict = {i:f for i,f in enumerate(trial_data)}
+	length = len(fname_dict)
+ 
+	print("full trial length: ", len(fname_dict))
+
+	train_set = []
+	valid_set = []
+	test_set = []
+ 
+	train_list_idx = random.sample(fname_dict.keys(), int(length*0.6))
+	for i in train_list_idx:
+		train_set.append(fname_dict[i]+".csv")
+		del fname_dict[i]
+		
+	valid_list_idx = random.sample(fname_dict.keys(), int(length*0.2))
+	for i in valid_list_idx:
+		valid_set.append(fname_dict[i]+".csv")
+		del fname_dict[i]
+
+	test_list_idx = random.sample(fname_dict.keys(), int(length*0.2))    
+	for i in test_list_idx:
+		test_set.append(fname_dict[i]+".csv")
+		del fname_dict[i]
+  
+	return train_set, valid_set, test_set
+    
+dataset_rootpath = configuration['dataset_rootpath']
+dataset_wavspath = configuration['dataset_wavspath']
+dataset_labelpath = configuration['labelpath']
+# train_set, valid_set, test_set = train_val_test_split(dataset_rootpath, dataset_labelpath, SEED)
+
+def load_partition_set(partition_path, seed):
+	import json
+
+	with open(partition_path, 'r') as f:    
+		seed_data = json.load(f)
+
+	seed_data_train = seed_data[f'seed_{seed}']['Train_Set']
+	seed_data_valid = seed_data[f'seed_{seed}']['Validation_Set']
+	seed_data_test  = seed_data[f'seed_{seed}']['Test_Set']
+ 
+	seed_data_train = [fn + ".csv" for fn in seed_data_train]
+	seed_data_valid = [fn + ".csv" for fn in seed_data_valid]
+	seed_data_test  = [fn + ".csv" for fn in seed_data_test ]
+
+	return seed_data_train, seed_data_valid, seed_data_test
+
+
+partition_path = "../data/Affwild2/seed_data.json"
+ 
+train_set, valid_set, test_set = load_partition_set(partition_path, SEED)
+
+init_time = datetime.now()
+init_time = init_time.strftime('%m%d_%H%M')
+
+root_time_chk_dir = "time_chk"
+time_chk_path = os.path.join(root_time_chk_dir, init_time)
+if not os.path.exists(time_chk_path):
+    os.makedirs(time_chk_path)
 
 if flag == "Training":
 	print("Train Data")
-	traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=configuration['train_params']['labelpath'],
+	# traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=configuration['train_params']['labelpath'],
+	# 						audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
+	# 						flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
+	# 						subseq_length = configuration['train_params']['subseq_length'])
+	traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=train_set, labelPath=dataset_labelpath,
 							audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
 							flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
-							subseq_length = configuration['train_params']['subseq_length'])
+							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
-					**configuration['train_params']['loader_params'])
+      				batch_size=16, shuffle=False, pin_memory=False)
+     		# **configuration['train_params']['loader_params']
 			#batch_size=64, shuffle=True, collate_fn=TrainPadSequence(),
 			#num_workers=2, pin_memory=True) #, drop_last = True)
 
 	print("Val Data")
-	valdataset = ImageList_val(root=configuration['dataset_rootpath'], fileList=configuration['val_params']['labelpath'],
+	valdataset = ImageList_val(root=configuration['dataset_rootpath'], fileList=valid_set, labelPath=dataset_labelpath,
 							audList=configuration['dataset_wavspath'], length=configuration['val_params']['seq_length'],
 							flag='val', stride=configuration['val_params']['stride'], dilation = configuration['val_params']['dilation'],
 							subseq_length = configuration['val_params']['subseq_length'])
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
-					**configuration['val_params']['loader_params'])
+					batch_size=16, shuffle=False, pin_memory=False)
+					# **configuration['val_params']['loader_params'])
 	print("Number of Train samples:" + str(len(traindataset)))
 	print("Number of Val samples:" + str(len(valdataset)))
 else:
 	print("Testing")
-	testdataset = ImageList_test(root=configuration['dataset_rootpath'], fileList=configuration['test_params']['labelpath'],
+	testdataset = ImageList_test(root=configuration['dataset_rootpath'], fileList=test_set, labelPath=dataset_labelpath,
 						audList=configuration['dataset_wavspath'], length=configuration['test_params']['seq_length'],
 						flag='Test', stride=configuration['test_params']['stride'], dilation = configuration['test_params']['dilation'],
 						subseq_length = configuration['test_params']['subseq_length'])
@@ -255,12 +372,19 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10, verbose
 
 cnt = 0
 
+<<<<<<< HEAD
 init_time = datetime.now()
 init_time = init_time.strftime('%Y%m%d_%H%M%S')
 
 columns = [	"time",
 			"epoch",
 			"best_epoch",
+=======
+columns = [	"time",
+			"epoch",
+			"best_epoch",
+			"best_Val_acc",
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 			"Training_loss",
 			"Valid_loss",
 			"Training_vacc",
@@ -269,7 +393,13 @@ columns = [	"time",
 			"Valid_aacc"]
 
 init_df = pd.DataFrame(columns=columns)
+<<<<<<< HEAD
 init_df.to_csv(f"{save_path}/{init_time}_output.csv", index=False)
+=======
+csv_name = f'{result_save_path}/{init_time}_seed_{SEED}_output.csv'
+save_model_path = f'{weight_save_path}/{init_time}_seed_{SEED}_cam_model.pt'
+init_df.to_csv(csv_name, index=False)
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 for epoch in range(start_epoch, total_epoch):
 	try:
@@ -279,7 +409,11 @@ for epoch in range(start_epoch, total_epoch):
   
 		# train for one epoch
 		train_tic = time.time()
+<<<<<<< HEAD
 		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model)
+=======
+		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, time_chk_path=time_chk_path)
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 		train_toc = time.time()
 		print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
 		logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))
@@ -304,7 +438,11 @@ for epoch in range(start_epoch, total_epoch):
 		logging.info(ValidationAccuracy_V)
 		logging.info(ValidationAccuracy_A)
 
+<<<<<<< HEAD
 		if (Valid_vacc + Valid_aacc) > best_Val_acc:
+=======
+		if (Valid_vacc + Valid_aacc) > np.float32(best_Val_acc):
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 			print('Saving..')
 			print("best_Val_accV: %0.3f" % Valid_vacc)
 			print("best_Val_accA: %0.3f" % Valid_aacc)
@@ -314,13 +452,23 @@ for epoch in range(start_epoch, total_epoch):
 				'best_Val_accA': Valid_aacc,
 				'best_Val_acc_epoch': epoch,
 			}
+<<<<<<< HEAD
 			if not os.path.isdir(path):
 				os.mkdir(path)
 			torch.save(state, os.path.join(path,'cam_model.pt'))
+=======
+			if not os.path.isdir(weight_save_path):
+				os.mkdir(weight_save_path)
+    
+			# save_model_path = os.path.join(weight_save_path,f'{init_time}_{SEED}_cam_model.pt')
+			
+			torch.save(state, save_model_path)
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 			best_Val_acc = Valid_vacc + Valid_aacc
 			best_Val_acc_epoch = epoch
 		epoch_toc = time.time()
 		print("Epoch {}/{} took {:.1f} seconds".format(epoch, total_epoch, epoch_toc - epoch_tic))
+<<<<<<< HEAD
 	
 	
 		now = datetime.now() 
@@ -357,4 +505,49 @@ for epoch in range(start_epoch, total_epoch):
 		print(traceback.format_exc())
 		if epoch == start_epoch:
 			os.system(f"rm -rf {save_path}/{init_time}_output.csv")
+=======
+  
+		print("best_PrivateTest_acc: %0.3f" % best_Val_acc)
+		print("best_PrivateTest_acc_epoch: %d" % best_Val_acc_epoch)	
+	
+		now = datetime.now() 
+		csv_record_time = now.strftime('%Y%m%d_%H%M%S')
+		csv_epoch = epoch
+		csv_best_epoch = best_Val_acc_epoch
+		csv_best_Val_acc = f"{(best_Val_acc/2):.4f}"
+		csv_Training_loss = f"{Training_loss:.4f}"
+		csv_Valid_loss = f"{Valid_loss:.4f}"
+		csv_Training_vacc = f"{Training_vacc:.4f}"
+		csv_Training_aacc = f"{Training_aacc:.4f}"
+		csv_Valid_vacc = f"{Valid_vacc:.4f}"
+		csv_Valid_aacc = f"{Valid_aacc:.4f}"
+		
+		csv_data = [csv_record_time, 
+					csv_epoch,
+					csv_best_epoch,
+    				csv_best_Val_acc,
+					csv_Training_loss,
+					csv_Valid_loss,
+					csv_Training_vacc,
+					csv_Training_aacc,
+					csv_Valid_vacc,
+					csv_Valid_aacc]
+		
+		df = pd.DataFrame([csv_data], columns=columns)
+		df.to_csv(csv_name, mode='a', header=False, index=False)
+	
+		# tb.close()
+		#print("best_PublicTest_acc: %0.3f" % best_PublicTest_acc)
+		#print("best_PublicTest_acc_epoch: %d" % best_PublicTest_acc_epoch)
+	except Exception as e:
+		print(traceback.format_exc())
+		if epoch == start_epoch:
+			os.system(f"rm -rf {csv_name}")
+		exit()
+
+	except KeyboardInterrupt as k:
+		print(traceback.format_exc())
+		if epoch == start_epoch:
+			os.system(f"rm -rf {csv_name}")
+>>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 		exit()
