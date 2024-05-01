@@ -29,13 +29,9 @@ from losses.loss import CCCLoss
 from datetime import datetime
 import pandas as pd
 import traceback
-<<<<<<< HEAD
-#import wandb
-=======
 from torch import nn
 #import wandb
 import json
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 from warnings import filterwarnings
 filterwarnings("ignore")
 
@@ -65,13 +61,7 @@ ValidationAccuracy_A = []
 Logfile_name = "LogFiles/" + "log_file.log"
 logging.basicConfig(filename=Logfile_name, level=logging.INFO)
 
-<<<<<<< HEAD
-# tb = SummaryWriter()
-
-SEED = configuration['SEED']
-=======
 SEED = args.seed
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 ### Using seed for deterministic perfromVisual_model_withI3Dg order
 # if (SEED == 0):
 # 	cudnn.benchmark = True
@@ -172,16 +162,9 @@ if not os.path.isdir("SavedWeights"):
 
 weight_save_path = "SavedWeights"
 
-<<<<<<< HEAD
-save_path ="save"
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-=======
 result_save_path ="save"
 if not os.path.exists(result_save_path):
     os.makedirs(result_save_path)
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 ### Loading audiovisual model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -210,17 +193,11 @@ for p in model.children():
 	p.train(False)
 
 ## Fusion model
-<<<<<<< HEAD
-fusion_model = CAM().cuda()
-fusion_model = nn.DataParallel(fusion_model)
-fusion_model = fusion_model.cuda()
-=======
 # fusion_model = CAM().cuda()
 fusion_model = CAM()
 fusion_model = nn.DataParallel(fusion_model)
 # fusion_model.cuda()
 fusion_model = fusion_model.to(device=device)
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 flag = configuration["Mode"]
 
@@ -236,10 +213,6 @@ if flag == "Testing":
 		param.requires_grad = False
 
 print('==> Preparing data..')
-<<<<<<< HEAD
-# label_file = '../../SpeechEmotionRec/ratings_gold_standard/ratings_gold_standard/valence/'
-=======
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 
 def matching_files(root_path, anno_path):
@@ -331,7 +304,10 @@ if flag == "Training":
 							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
-      				batch_size=16, shuffle=False, pin_memory=False)
+      				**configuration['train_params']['loader_params'])
+	# trainloader = torch.utils.data.DataLoader(
+	# 				traindataset, collate_fn=TrainPadSequence(),
+    #   				batch_size=16, shuffle=False, pin_memory=False)
      		# **configuration['train_params']['loader_params']
 			#batch_size=64, shuffle=True, collate_fn=TrainPadSequence(),
 			#num_workers=2, pin_memory=True) #, drop_last = True)
@@ -343,8 +319,12 @@ if flag == "Training":
 							subseq_length = configuration['val_params']['subseq_length'])
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
-					batch_size=16, shuffle=False, pin_memory=False)
-					# **configuration['val_params']['loader_params'])
+     				**configuration['val_params']['loader_params'])
+					# batch_size=16, shuffle=False, pin_memory=False)
+	# valloader = torch.utils.data.DataLoader(
+	# 				valdataset, collate_fn=ValPadSequence(),
+	# 				batch_size=16, shuffle=False, pin_memory=False)
+	# 				# **configuration['val_params']['loader_params'])     
 	print("Number of Train samples:" + str(len(traindataset)))
 	print("Number of Val samples:" + str(len(valdataset)))
 else:
@@ -372,19 +352,10 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=10, verbose
 
 cnt = 0
 
-<<<<<<< HEAD
-init_time = datetime.now()
-init_time = init_time.strftime('%Y%m%d_%H%M%S')
-
-columns = [	"time",
-			"epoch",
-			"best_epoch",
-=======
 columns = [	"time",
 			"epoch",
 			"best_epoch",
 			"best_Val_acc",
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 			"Training_loss",
 			"Valid_loss",
 			"Training_vacc",
@@ -393,13 +364,9 @@ columns = [	"time",
 			"Valid_aacc"]
 
 init_df = pd.DataFrame(columns=columns)
-<<<<<<< HEAD
-init_df.to_csv(f"{save_path}/{init_time}_output.csv", index=False)
-=======
 csv_name = f'{result_save_path}/{init_time}_seed_{SEED}_output.csv'
 save_model_path = f'{weight_save_path}/{init_time}_seed_{SEED}_cam_model.pt'
 init_df.to_csv(csv_name, index=False)
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 
 for epoch in range(start_epoch, total_epoch):
 	try:
@@ -409,11 +376,7 @@ for epoch in range(start_epoch, total_epoch):
   
 		# train for one epoch
 		train_tic = time.time()
-<<<<<<< HEAD
-		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model)
-=======
 		Training_vacc, Training_aacc, Training_loss = train(trainloader, model, criterion, optimizer, scheduler, epoch, fusion_model, time_chk_path=time_chk_path)
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 		train_toc = time.time()
 		print("Train phase took {:.1f} seconds".format(train_toc - train_tic))
 		logging.info("Train phase took {:.1f} seconds".format(train_toc - train_tic))
@@ -438,11 +401,7 @@ for epoch in range(start_epoch, total_epoch):
 		logging.info(ValidationAccuracy_V)
 		logging.info(ValidationAccuracy_A)
 
-<<<<<<< HEAD
-		if (Valid_vacc + Valid_aacc) > best_Val_acc:
-=======
 		if (Valid_vacc + Valid_aacc) > np.float32(best_Val_acc):
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 			print('Saving..')
 			print("best_Val_accV: %0.3f" % Valid_vacc)
 			print("best_Val_accA: %0.3f" % Valid_aacc)
@@ -452,60 +411,16 @@ for epoch in range(start_epoch, total_epoch):
 				'best_Val_accA': Valid_aacc,
 				'best_Val_acc_epoch': epoch,
 			}
-<<<<<<< HEAD
-			if not os.path.isdir(path):
-				os.mkdir(path)
-			torch.save(state, os.path.join(path,'cam_model.pt'))
-=======
 			if not os.path.isdir(weight_save_path):
 				os.mkdir(weight_save_path)
     
 			# save_model_path = os.path.join(weight_save_path,f'{init_time}_{SEED}_cam_model.pt')
 			
 			torch.save(state, save_model_path)
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 			best_Val_acc = Valid_vacc + Valid_aacc
 			best_Val_acc_epoch = epoch
 		epoch_toc = time.time()
 		print("Epoch {}/{} took {:.1f} seconds".format(epoch, total_epoch, epoch_toc - epoch_tic))
-<<<<<<< HEAD
-	
-	
-		now = datetime.now() 
-		record_time = now.strftime('%Y%m%d_%H%M%S')
-		epoch = epoch
-		best_epoch = best_Val_acc
-		Training_loss = f"{Training_loss:.4f}"
-		Valid_loss = f"{Valid_loss:.4f}"
-		Training_vacc = f"{Training_vacc:.4f}"
-		Training_aacc = f"{Training_aacc:.4f}"
-		Valid_vacc = f"{Valid_vacc:.4f}"
-		Valid_aacc = f"{Valid_aacc:.4f}"
-		
-		csv_data = [record_time, 
-					epoch,
-					best_epoch,
-					Training_loss,
-					Valid_loss,
-					Training_vacc,
-					Training_aacc,
-					Valid_vacc,
-					Valid_aacc]
-		
-		df = pd.DataFrame([csv_data], columns=columns)
-		df.to_csv(f"{save_path}/{init_time}_output.csv", mode='a', header=False, index=False)
-	
-		
-		# tb.close()
-		#print("best_PublicTest_acc: %0.3f" % best_PublicTest_acc)
-		#print("best_PublicTest_acc_epoch: %d" % best_PublicTest_acc_epoch)
-		print("best_PrivateTest_acc: %0.3f" % best_Val_acc)
-		print("best_PrivateTest_acc_epoch: %d" % best_Val_acc_epoch)
-	except Exception as e:
-		print(traceback.format_exc())
-		if epoch == start_epoch:
-			os.system(f"rm -rf {save_path}/{init_time}_output.csv")
-=======
   
 		print("best_PrivateTest_acc: %0.3f" % best_Val_acc)
 		print("best_PrivateTest_acc_epoch: %d" % best_Val_acc_epoch)	
@@ -549,5 +464,4 @@ for epoch in range(start_epoch, total_epoch):
 		print(traceback.format_exc())
 		if epoch == start_epoch:
 			os.system(f"rm -rf {csv_name}")
->>>>>>> 2997cc3e7126560cbd8eb5ba2d7f6486ab644672
 		exit()
