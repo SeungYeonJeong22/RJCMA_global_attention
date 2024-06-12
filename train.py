@@ -42,6 +42,9 @@ import numpy as np
 import sys
 import math
 from losses.CCC import CCC
+import subprocess
+
+
 #import wandb
 learning_rate_decay_start = 5  # 50
 learning_rate_decay_every = 2 # 5
@@ -49,6 +52,10 @@ learning_rate_decay_rate = 0.8 # 0.9
 total_epoch = 30
 lr = 0.0001
 scaler = torch.cuda.amp.GradScaler()
+
+def clear_cache():
+    # 페이지 캐시, 디렉토리 엔트리 및 inode를 모두 비웁니다.
+    subprocess.run(['sudo', 'sysctl', '-w', 'vm.drop_caches=3'], check=True)
 
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time_chk_path):
 	print('\nEpoch: %d' % epoch)
@@ -81,11 +88,14 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 	#torch.cuda.synchronize()
 	#t1 = time.time()
 	n = 0
-	time_chk_file = os.path.join(time_chk_path, "time_chk.txt")
+	if time_chk_path:
+		time_chk_file = os.path.join(time_chk_path, "time_chk.txt")
+  
 
 	for batch_idx, (visualdata, audiodata, labels_V, labels_A) in tqdm(enumerate(train_loader),
 				 										 total=len(train_loader), position=0, leave=True):
-
+     
+     
 		optimizer.zero_grad(set_to_none=True)
 		audiodata = audiodata.cuda()#.unsqueeze(2)
 
@@ -106,8 +116,9 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 					ed1 = time.time()
 
 					pre_trained_model_time = ed1 - st1
-					with open(time_chk_file, 'a') as f:
-						f.write(f"Time pre_trained_model: {pre_trained_model_time}\n")
+					if time_chk_path:
+						with open(time_chk_file, 'a') as f:
+							f.write(f"Time pre_trained_model: {pre_trained_model_time}\n")
 					visual_feats[i,:,:] = visualfeat
 					aud_feats[i,:,:] = aud_feat
 
@@ -116,13 +127,14 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 			ed2 = time.time()
    
 			time_cam_model= ed2 - st2
-			with open(time_chk_file, 'a') as f:
-				f.write(f"Time cam model: {time_cam_model}\n")
-				f.write(f"Epoch: {epoch}\n")
-				f.write(f"batch_idx: {batch_idx}\n")
-				f.write("----"*20)
-				f.write("\n")
-			f.close()
+			if time_chk_path:
+				with open(time_chk_file, 'a') as f:
+					f.write(f"Time cam model: {time_cam_model}\n")
+					f.write(f"Epoch: {epoch}\n")
+					f.write(f"batch_idx: {batch_idx}\n")
+					f.write("----"*20)
+					f.write("\n")
+				f.close()
 
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])

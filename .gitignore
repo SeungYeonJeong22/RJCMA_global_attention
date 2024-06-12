@@ -204,3 +204,11 @@ Affwild2_processed_model2
 /SavedWeights
 /vggish
 *.out
+
+*.pyc
+
+*/*/*/__pycache__/
+
+*/*/__pycache__/
+
+*/__pycache__/

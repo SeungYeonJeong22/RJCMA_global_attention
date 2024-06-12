@@ -17,7 +17,7 @@ import utils
 import matplotlib.pyplot as plt
 from utils.parser import parse_configuration
 import numpy as np
-from models.orig_cam import CAM
+from models.orig_cam import CAM, LSTM_CAM
 from models.tsav import TwoStreamAuralVisualModel
 import sys
 from datasets.dataset_new import ImageList
@@ -26,7 +26,7 @@ from datasets.dataset_test import ImageList_test
 import math
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from losses.loss import CCCLoss
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import traceback
 from torch import nn
@@ -41,11 +41,23 @@ os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 args = argparse.ArgumentParser(description='DomainAdaptation')
 args.add_argument('-c', '--config', default="config_file.json", type=str,
 					  help='config file path (default: None)')
+args.add_argument('-t', '--time_chk', default="False", type=str,
+					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
+args.add_argument('-cpu_seed', '--cpu_seed', default=0, type=int,
+					  help='cpu seed number max:4 (default: 0)')
+args.add_argument('-fm', '--fusion_model', default="LSTM_CAM", type=str,
+					  help='Fusion Model (default: LSTM_CAM)')
+
 
 args = args.parse_args()
 configuration = parse_configuration(args.config)
+
+if (args.time_chk).lower() == "true":
+    is_time_chk = True
+else:
+    is_time_chk = False
 
 best_Val_acc = 0  # best PrivateTest accuracy
 #best_Val_acc = 0  # best PrivateTest accuracy
@@ -191,12 +203,21 @@ for p in model.parameters():
 	p.requires_grad = False
 for p in model.children():
 	p.train(False)
+ 
+print("CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
+print("Is CUDA available? ", torch.cuda.is_available())
 
 ## Fusion model
 # fusion_model = CAM().cuda()
-fusion_model = CAM()
-fusion_model = nn.DataParallel(fusion_model)
-# fusion_model.cuda()
+fusion_model_name = args.fusion_model
+if fusion_model_name == 'CAM':
+	fusion_model = CAM()
+elif fusion_model_name == "LSTM_CAM":
+    fusion_model = LSTM_CAM()
+    
+print_model_name = fusion_model.__class__.__name__
+print("Fusion Model : ", print_model_name)
+# fusion_model = nn.DataParallel(fusion_model)
 fusion_model = fusion_model.to(device=device)
 
 flag = configuration["Mode"]
@@ -288,29 +309,40 @@ init_time = datetime.now()
 init_time = init_time.strftime('%m%d_%H%M')
 
 root_time_chk_dir = "time_chk"
-time_chk_path = os.path.join(root_time_chk_dir, init_time)
-if not os.path.exists(time_chk_path):
-    os.makedirs(time_chk_path)
+
+if is_time_chk:
+	time_chk_path = os.path.join(root_time_chk_dir, init_time)
+    
+	if not os.path.exists(time_chk_path):
+		os.makedirs(time_chk_path)
+	else:
+		init_time = datetime.now()
+		init_time = init_time + timedelta(minutes=1)  # 1분 더하기
+		init_time = init_time.strftime('%m%d_%H%M')
+		time_chk_path = os.path.join(root_time_chk_dir, init_time)
+		os.makedirs(time_chk_path)
+else:
+    time_chk_path = None
+    
+def set_worker_cpu_affinity(worker_id):
+    global args
+    cpu_seed = args.cpu_seed
+    
+    pid = os.getpid()
+    cpu_cnt = os.cpu_count() - (cpu_seed * 8)
+    
+    core_id = set(i for i in range(cpu_cnt, cpu_cnt-9, -1))
+    os.sched_setaffinity(pid, core_id)
 
 if flag == "Training":
 	print("Train Data")
-	# traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=configuration['train_params']['labelpath'],
-	# 						audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
-	# 						flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
-	# 						subseq_length = configuration['train_params']['subseq_length'])
 	traindataset = ImageList(root=configuration['dataset_rootpath'], fileList=train_set, labelPath=dataset_labelpath,
 							audList=configuration['dataset_wavspath'], length=configuration['train_params']['seq_length'],
 							flag='train', stride=configuration['train_params']['stride'], dilation = configuration['train_params']['dilation'],
 							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
-      				**configuration['train_params']['loader_params'])
-	# trainloader = torch.utils.data.DataLoader(
-	# 				traindataset, collate_fn=TrainPadSequence(),
-    #   				batch_size=16, shuffle=False, pin_memory=False)
-     		# **configuration['train_params']['loader_params']
-			#batch_size=64, shuffle=True, collate_fn=TrainPadSequence(),
-			#num_workers=2, pin_memory=True) #, drop_last = True)
+      				**configuration['train_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
 
 	print("Val Data")
 	valdataset = ImageList_val(root=configuration['dataset_rootpath'], fileList=valid_set, labelPath=dataset_labelpath,
@@ -319,7 +351,7 @@ if flag == "Training":
 							subseq_length = configuration['val_params']['subseq_length'])
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
-     				**configuration['val_params']['loader_params'])
+     				**configuration['val_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
 					# batch_size=16, shuffle=False, pin_memory=False)
 	# valloader = torch.utils.data.DataLoader(
 	# 				valdataset, collate_fn=ValPadSequence(),
@@ -364,8 +396,8 @@ columns = [	"time",
 			"Valid_aacc"]
 
 init_df = pd.DataFrame(columns=columns)
-csv_name = f'{result_save_path}/{init_time}_seed_{SEED}_output.csv'
-save_model_path = f'{weight_save_path}/{init_time}_seed_{SEED}_cam_model.pt'
+csv_name = f'{result_save_path}/{init_time}_seed_{SEED}_{fusion_model_name}_output.csv'
+save_model_path = f'{weight_save_path}/{init_time}_seed_{SEED}_{fusion_model_name}_model.pt'
 init_df.to_csv(csv_name, index=False)
 
 for epoch in range(start_epoch, total_epoch):
