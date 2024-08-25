@@ -28,7 +28,7 @@ from datasets.dataset_test import ImageList_test
 import math
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from losses.loss import CCCLoss
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import traceback
 from torch import nn
