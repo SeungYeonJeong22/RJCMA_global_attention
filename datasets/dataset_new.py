@@ -1,3 +1,4 @@
+########################################################################################
 import torch.utils.data as data
 from PIL import Image
 import os
@@ -15,6 +16,7 @@ import gc
 import time
 import psutil
 
+
 def get_filename(n):
 	filename, ext = os.path.splitext(os.path.basename(n))
 	return filename
@@ -24,22 +26,22 @@ def create_jca_seq_data(videoslist, label_path, win_length, stride, dilation, wa
 	shift_length = stride #length-1
 	sequences = []
 	# csv_data_list = os.listdir(videoslist)
+	csv_data_list = videoslist
 	skip_vids = ['313.csv', '212.csv', '303.csv', '171.csv', '40-30-1280x720.csv', '286.csv', '270.csv', '234.csv', '239.csv', '266.csv']
 
-	print("Number of Sequences: " + str(len(set(videoslist))))
-	for video in videoslist:
+	print("Number of Sequences: " + str(len(set(csv_data_list))))
+	for video in csv_data_list:
 		if video.startswith('.'):
 			continue
 		if video in skip_vids:
 			continue
 		vid_data = pd.read_csv(os.path.join(label_path,video))
   
-		# wav file 에러나는 파일만 디렉토리 돌려서 
-		if video=="420.csv" or video=="110.csv":
+				# wav file 에러나는 파일만 디렉토리 돌려서 
+		if video=="420.csv" or video=="110.csv" or video=="318.csv":
 			wavs_list = "../data/Affwild2/SegmendtedAudioFiles/Shift_2_win_32/"
 		else:
 			wavs_list = "../data/Affwild2/SegmendtedAudioFiles/Shift_1_win_32/"
-		# wavs_list = "../data/Affwild2/SegmendtedAudioFiles/Shift_1_win_32/"
   
 		video_data = vid_data.to_dict("list")
 		images = video_data['img']
@@ -210,26 +212,24 @@ class ImageList(data.Dataset):
 		return len(self.sequence_list)
 
 	def load_vis_data(self, root, SeqPath, flag, subseq_len):
-		base_root = "/".join(root.split("/")[:-1])
-		img_npy_path = os.path.join(base_root, "img_npy")
-		if not os.path.exists(img_npy_path):
-			os.makedirs(img_npy_path)
-
 		clip_transform = ComposeWithInvert([NumpyToTensor(),
-											Normalize(mean=[0.43216, 0.394666, 0.37645],
-														std=[0.22803, 0.22145, 0.216989])])
-		if flag == 'train':
+												 Normalize(mean=[0.43216, 0.394666, 0.37645],
+														   std=[0.22803, 0.22145, 0.216989])])
+		if (flag == 'train'):
 			data_transforms = transforms.Compose([videotransforms.RandomCrop(224),
-													videotransforms.RandomHorizontalFlip()])
+										   videotransforms.RandomHorizontalFlip()])
 		else:
-			data_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
-
+			data_transforms=transforms.Compose([videotransforms.CenterCrop(224)])
+		output = []
+		subseq_inputs = []
+		subseq_labels = []
 		labV = []
 		labA = []
+		frame_ids = []
+		seq_length = math.ceil(self.win_length / self.dilation)
 		seqs = []
-
 		for clip in SeqPath:
-			images = np.zeros((8, 224, 224, 3), dtype=np.uint8)
+			images = np.zeros((8, 112, 112, 3), dtype=np.uint8)
 			labelV = -5.0
 			labelA = -5.0
 			for im_index, image in enumerate(clip):
@@ -237,89 +237,50 @@ class ImageList(data.Dataset):
 				labelV = image[1]
 				labelA = image[2]
 
-				npy_file_path = os.path.join(img_npy_path, imgPath.replace('.jpg', '.npy'))
-    
-				if not os.path.exists("/".join(npy_file_path.split("/")[:-1])):
-					os.makedirs("/".join(npy_file_path.split("/")[:-1]))
-     
-				if not os.path.exists(npy_file_path):
-					try:
-						img = np.array(Image.open(os.path.join(root, imgPath)))
-						images[im_index, :, :, 0:3] = img
-      
-						np.save(npy_file_path, images)
-					except Exception as e:
-						pass
-				else:
-					images = np.load(npy_file_path)
-     
-				imgs = clip_transform(RandomColorAugmentation(images))
-				seqs.append(imgs)
-
 				try:
-					labV.append(float(labelV))
-					labA.append(float(labelA))
-				except Exception as e:
-					labV.append(float(labelV.split("\\")[0]))
-					labA.append(float(labelA.split("\\")[0]))
+					img = np.array(Image.open(os.path.join(root , imgPath)))
+					images[im_index, :, :, 0:3] = img
+				except:
+					pass
+
+			imgs = clip_transform(RandomColorAugmentation(images))
+			seqs.append(imgs)
+			labV.append(float(labelV))
+			labA.append(float(labelA))
 
 		targetsV = torch.FloatTensor(labV)
 		targetsA = torch.FloatTensor(labA)
-		vid_seqs = torch.stack(seqs)
-  
-		del seqs, labV, labA
+		vid_seqs = torch.stack(seqs)#.permute(4,0,1,2,3)
 		gc.collect()
 
-		return vid_seqs, targetsV, targetsA
-
+		return vid_seqs, targetsV, targetsA # vid_seqs,
 
 	def load_aud_data(self, wav_file, num_subseqs, flag):
-		base_root = "/".join(self.root.split("/")[:-1])
-		audio_npy_path = os.path.join(base_root, "audio_npy")
-		if not os.path.exists(audio_npy_path):
-			os.makedirs(audio_npy_path)
-
 		transform_spectra = transforms.Compose([
 			transforms.ToPILImage(),
 			transforms.RandomVerticalFlip(1),
 			transforms.ToTensor(),
 		])
-  
 		audio_spec_transform = ComposeWithInvert([AmpToDB(), Normalize(mean=[-14.8], std=[19.895])])
 
 		spectrograms = []
 		max_spec_shape = []
 		for wave in wav_file:
-			npy_file_path = os.path.join(audio_npy_path, "/".join(wave.split("/")[-2:]).replace(".wav", ".npy"))
-			# npy_file_path = os.path.join(audio_npy_path, os.path.basename(wave).replace('.wav', '.npy'))
-   
-			if not os.path.exists("/".join(npy_file_path.split("/")[:-1])):
-				os.makedirs("/".join(npy_file_path.split("/")[:-1]))   
-   
-			if not os.path.exists(npy_file_path):
-				try:
-					audio, sr = torchaudio.load(wave)
-				except Exception as e:
-					audio, sr = torchaudio.load(wave)
+			try:
+				audio, sr = torchaudio.load(wave) #,
+			except:
+				audio, sr = torchaudio.load(wave) #,
+			if audio.shape[1] <= 45599:
+				_audio = torch.zeros((1, 45599))
+				_audio[:, -audio.shape[1]:] = audio
+				audio = _audio
+			audiofeatures = torchaudio.transforms.MelSpectrogram(sample_rate=sr, win_length=882, hop_length=441, n_mels=64,
+												   n_fft=1024, window_fn=torch.hann_window)(audio)
 
-				if audio.shape[1] <= 45599:
-					_audio = torch.zeros((1, 45599))
-					_audio[:, -audio.shape[1]:] = audio
-					audio = _audio
+			max_spec_shape.append(audiofeatures.shape[2])
+			audio_feature = audio_spec_transform(audiofeatures)
 
-				audiofeatures = torchaudio.transforms.MelSpectrogram(sample_rate=sr, win_length=882, hop_length=441, n_mels=64,
-																		n_fft=1024, window_fn=torch.hann_window)(audio)
-
-				audio_feature = audio_spec_transform(audiofeatures)
-				np.save(npy_file_path, audio_feature.numpy())
-    
-				spectrograms.append(audio_feature)
-				max_spec_shape.append(audiofeatures.shape[2])
-			else:
-				audio_feature = torch.tensor(np.load(npy_file_path))
-				spectrograms.append(audio_feature)
-				max_spec_shape.append(audio_feature.shape[2])
-
+			spectrograms.append(audio_feature)
 		spec_dim = max(max_spec_shape)
 
 		audio_features = torch.zeros(len(max_spec_shape), 1, 64, spec_dim)
@@ -327,10 +288,7 @@ class ImageList(data.Dataset):
 			if spectrogram.shape[2] < spec_dim:
 				audio_features[batch_idx, :, :, -spectrogram.shape[2]:] = spectrogram
 			else:
-				audio_features[batch_idx, :, :, :] = spectrogram
-    
-    
-		del spectrograms, max_spec_shape, spec_dim
-		gc.collect()
+				audio_features[batch_idx, :,:, :] = spectrogram
 
-		return audio_features
+		return audio_features # melspecs_scaled
+

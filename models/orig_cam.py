@@ -73,6 +73,9 @@ class CAM(nn.Module):
   
         vouts = self.vregressor(audiovisualfeatures) #.transpose(0,1))
         aouts = self.aregressor(audiovisualfeatures) #.transpose(0,1))
+        
+        print("vouts : ", vouts.shape)
+        print("aouts : ", aouts.shape)
 
         return vouts.squeeze(2), aouts.squeeze(2)  #final_aud_feat.transpose(1,2), final_vis_feat.transpose(1,2)
 
@@ -138,6 +141,7 @@ class LSTM_CAM(nn.Module):
         video, audio = self.coattn(video, audio)
 
         audiovisualfeatures = torch.cat((video, audio), -1)
+        
         audiovisualfeatures = self.Joint(audiovisualfeatures)
         vouts = self.vregressor(audiovisualfeatures) #.transpose(0,1))
         aouts = self.aregressor(audiovisualfeatures) #.transpose(0,1))

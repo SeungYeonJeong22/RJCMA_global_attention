@@ -54,10 +54,9 @@ lr = 0.0001
 scaler = torch.cuda.amp.GradScaler()
 
 def clear_cache():
-    # 페이지 캐시, 디렉토리 엔트리 및 inode를 모두 비웁니다.
     subprocess.run(['sudo', 'sysctl', '-w', 'vm.drop_caches=3'], check=True)
 
-def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time_chk_path):
+def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, time_chk_path):
 	print('\nEpoch: %d' % epoch)
 	global Train_acc
 	#wandb.watch(audiovisual_model, log_freq=100)
@@ -82,6 +81,9 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 		utils.set_lr(optimizer, current_lr)  # set the decayed rate
 	else:
 		current_lr = lr
+	######## chckpoint 없을 때 이거부터 ##########
+	utils.set_lr(optimizer, current_lr)
+	############################################
 	print('learning_rate: %s' % str(current_lr))
 	logging.info("Learning rate")
 	logging.info(current_lr)
@@ -119,7 +121,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 					if time_chk_path:
 						with open(time_chk_file, 'a') as f:
 							f.write(f"Time pre_trained_model: {pre_trained_model_time}\n")
-					visual_feats[i,:,:] = visualfeat
+					# visual_feats[i,:,:] = visualfeat
+					visual_feats[i,:,:] = visualfeat.view(seq_t, -1)
 					aud_feats[i,:,:] = aud_feat
 
 			st2 = time.time()
@@ -140,11 +143,14 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])
 			vtargets = labels_V.view(-1, labels_V.shape[0]*labels_V.shape[1]).cuda()
 			atargets = labels_A.view(-1, labels_A.shape[0]*labels_A.shape[1]).cuda()
-
+   
 			v_loss = criterion(voutputs, vtargets)
 			a_loss = criterion(aoutputs, atargets)
+   
 			final_loss = v_loss + a_loss
+   
 			epoch_loss += final_loss.cpu().data.numpy()
+   
 		scaler.scale(final_loss).backward()
 		scaler.step(optimizer)
 		scaler.update()
@@ -155,6 +161,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, cam, time
 
 		aout = aout + aoutputs.squeeze(0).detach().cpu().tolist()
 		atar = atar + atargets.squeeze(0).detach().cpu().tolist()
+  
+		# if batch_idx==20:break
 
 	scheduler.step(epoch_loss / n)
 

@@ -81,7 +81,9 @@ def validate(val_loader, model, criterion, epoch, cam):
 				aud_feats[i,:,:] = audio_feat
 
 			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
-   
+			# print("val audiovisual_vouts : ", audiovisual_vouts.shape)
+			# print("val audiovisual_aouts : ", audiovisual_aouts.shape)
+
 			##### 추가 #####
 			val_voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			val_aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])   
@@ -128,11 +130,14 @@ def validate(val_loader, model, criterion, epoch, cam):
 							pred_v[vid][frameid-1] = voutput
 							label_a[vid][frameid-1] = labA
 							label_v[vid][frameid-1] = labV
-			
+       
+		# if batch_idx==20:break
+       
 
 	for key in pred_a.keys():
 		clipped_preds_v = np.clip(pred_v[key], -1.0, 1.0)
 		clipped_preds_a = np.clip(pred_a[key], -1.0, 1.0)
+  
 
 		smoothened_preds_v = uniform_filter1d(clipped_preds_v, size=20, mode='constant')
 		smoothened_preds_a = uniform_filter1d(clipped_preds_a, size=50, mode='constant')
@@ -144,7 +149,6 @@ def validate(val_loader, model, criterion, epoch, cam):
 			aout.append(smoothened_preds_a[i])
 			vtar.append(tars_v[i])
 			atar.append(tars_a[i])
-
 
 	accV = ccc(np.array(vout), np.array(vtar))
 	accA = ccc(np.array(aout), np.array(atar))

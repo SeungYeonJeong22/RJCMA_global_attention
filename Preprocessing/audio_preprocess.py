@@ -103,7 +103,8 @@ def main():
        
 	video_files = os.listdir(video_files_dir)[int(start_range):int(end_range)]
  
-	video_files = ['110.avi', '420.mp4']
+	# video_files = ['110.avi', '420.mp4']
+	video_files = ['318.mp4']
 	for video in tqdm(video_files):
 		#video = "119.avi"
 		audio_file_name = extract_audio(video)
@@ -114,8 +115,8 @@ def main():
 			os.makedirs(out_file_dir)
 
 		time_filename = os.path.join(timestamps_dir, file_name) + '_video_ts.txt'
-		#if not os.path.exists(time_filename):
-		#	continue
+		if not os.path.exists(time_filename):
+			continue
 		f = open(os.path.join(time_filename))
 		lines = f.readlines()[1:]
 		num_files = len(lines)
