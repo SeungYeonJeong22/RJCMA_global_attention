@@ -17,9 +17,7 @@ import utils
 import matplotlib.pyplot as plt
 from utils.parser import parse_configuration
 import numpy as np
-from models.orig_cam import CAM as orig_CAM
-from models.orig_cam import LSTM_CAM as orig_LSTM_CAM
-from models.cam import CAM, LSTM_CAM
+from models.orig_cam import GAT_LSTM_CAM
 from models.tsav import TwoStreamAuralVisualModel
 import sys
 from datasets.dataset_new import ImageList
@@ -28,7 +26,7 @@ from datasets.dataset_test import ImageList_test
 import math
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from losses.loss import CCCLoss
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import traceback
 from torch import nn
@@ -47,10 +45,10 @@ args.add_argument('-t', '--time_chk', default="False", type=str,
 					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
-args.add_argument('-cpu_seed', '--cpu_seed', default=0, type=int,
-					  help='cpu seed number max:4 (default: 0)')
-args.add_argument('-fm', '--fusion_model', default="lstm", type=str,
-					  help='Fusion Model (default: lstm)')
+# args.add_argument('-cpu_seed', '--cpu_seed', default=0, type=int,
+# 					  help='cpu seed number max:4 (default: 0)')
+args.add_argument('-fm', '--fusion_model', default="gat_lstm", type=str,
+					  help='Fusion Model (default: gat_lstm)')
 
 args.add_argument('-r', '--resume', default=0, type=int,
 					  help='resume (default: None)')
@@ -220,20 +218,25 @@ print("CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
 print("Is CUDA available? ", torch.cuda.is_available())
 
 ## Fusion model
-# fusion_model = CAM().cuda()
+# # fusion_model = CAM().cuda()
+
+# fusion_model_name = args.fusion_model
+# if fusion_model_name.lower() == 'orig_jca':
+# 	fusion_model = orig_CAM()
+# elif fusion_model_name.lower() == "orig_lstm":
+#     fusion_model = orig_LSTM_CAM()
+# elif fusion_model_name.lower() == "jca":
+#     fusion_model = CAM()
+# elif fusion_model_name.lower() == "lstm":
+#     fusion_model = LSTM_CAM()
+
+
 fusion_model_name = args.fusion_model
-if fusion_model_name.lower() == 'orig_jca':
-	fusion_model = orig_CAM()
-elif fusion_model_name.lower() == "orig_lstm":
-    fusion_model = orig_LSTM_CAM()
-elif fusion_model_name.lower() == "jca":
-    fusion_model = CAM()
-elif fusion_model_name.lower() == "lstm":
-    fusion_model = LSTM_CAM()
-    
+fusion_model = GAT_LSTM_CAM()
+
 print_model_name = fusion_model.__class__.__name__
 print("Fusion Model : ", print_model_name)
-# fusion_model = nn.DataParallel(fusion_model)
+
 fusion_model = fusion_model.to(device=device)
 
 flag = configuration["Mode"]
@@ -356,16 +359,16 @@ if is_time_chk:
 else:
     time_chk_path = None
     
-def set_worker_cpu_affinity(worker_id):
-    global args
-    cpu_seed = args.cpu_seed
-    set_cpu_cnt=16 # change this
+# def set_worker_cpu_affinity(worker_id):
+#     global args
+#     cpu_seed = args.cpu_seed
+#     set_cpu_cnt=16 # change this
     
-    pid = os.getpid()
-    cpu_cnt = os.cpu_count() - (cpu_seed * set_cpu_cnt)
+#     pid = os.getpid()
+#     cpu_cnt = os.cpu_count() - (cpu_seed * set_cpu_cnt)
     
-    core_id = set(i for i in range(cpu_cnt, cpu_cnt-set_cpu_cnt+1, -1))
-    os.sched_setaffinity(pid, core_id)
+#     core_id = set(i for i in range(cpu_cnt, cpu_cnt-set_cpu_cnt+1, -1))
+#     os.sched_setaffinity(pid, core_id)
 
 if flag == "Training":
 	print("Train Data")
@@ -375,7 +378,8 @@ if flag == "Training":
 							subseq_length = configuration['train_params']['subseq_length'], time_chk_path=time_chk_path)
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
-      				**configuration['train_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
+      				**configuration['train_params']['loader_params'])
+      				# **configuration['train_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
 
 	print("Val Data")
 	valdataset = ImageList_val(root=configuration['dataset_rootpath'], fileList=valid_set, labelPath=dataset_labelpath,
@@ -384,12 +388,9 @@ if flag == "Training":
 							subseq_length = configuration['val_params']['subseq_length'])
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
-     				**configuration['val_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
-					# batch_size=16, shuffle=False, pin_memory=False)
-	# valloader = torch.utils.data.DataLoader(
-	# 				valdataset, collate_fn=ValPadSequence(),
-	# 				batch_size=16, shuffle=False, pin_memory=False)
-	# 				# **configuration['val_params']['loader_params'])     
+     				**configuration['val_params']['loader_params'])
+     				# **configuration['val_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
+					 
 	print("Number of Train samples:" + str(len(traindataset)))
 	print("Number of Val samples:" + str(len(valdataset)))
 else:

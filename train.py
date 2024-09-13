@@ -44,6 +44,7 @@ import math
 from losses.CCC import CCC
 import subprocess
 
+torch.autograd.set_detect_anomaly(True)
 
 #import wandb
 learning_rate_decay_start = 5  # 50
@@ -52,9 +53,6 @@ learning_rate_decay_rate = 0.8 # 0.9
 total_epoch = 30
 lr = 0.0001
 scaler = torch.cuda.amp.GradScaler()
-
-def clear_cache():
-    subprocess.run(['sudo', 'sysctl', '-w', 'vm.drop_caches=3'], check=True)
 
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, time_chk_path):
 	print('\nEpoch: %d' % epoch)
@@ -126,7 +124,10 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 					aud_feats[i,:,:] = aud_feat
 
 			st2 = time.time()
-			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
+			if batch_idx==0:
+				audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats)
+			else:
+				audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats, global_vid_fts, global_aud_fts)
 			ed2 = time.time()
    
 			time_cam_model= ed2 - st2
@@ -150,10 +151,13 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 			final_loss = v_loss + a_loss
    
 			epoch_loss += final_loss.cpu().data.numpy()
-   
-		scaler.scale(final_loss).backward()
-		scaler.step(optimizer)
-		scaler.update()
+
+		# scaler.scale(final_loss).backward(retain_graph=True)
+		# scaler.step(optimizer)
+		# scaler.update()
+
+		final_loss.backward(retain_graph=True)
+		optimizer.step()
 		n = n + 1
 
 		vout = vout + voutputs.squeeze(0).detach().cpu().tolist()
@@ -162,8 +166,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 		aout = aout + aoutputs.squeeze(0).detach().cpu().tolist()
 		atar = atar + atargets.squeeze(0).detach().cpu().tolist()
   
-		# if batch_idx==20:break
-
 	scheduler.step(epoch_loss / n)
 
 	if (len(vtar) > 1):

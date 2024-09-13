@@ -22,11 +22,13 @@ class PositionAttn(nn.Module):
 	def __init__(self, embed_dim, dim):
 		super(PositionAttn, self).__init__()
 		self.affine_audio = nn.Linear(embed_dim, dim)
-		self.affine_video = nn.Linear(512, dim)
+		# self.affine_video = nn.Linear(512, dim)
+		self.affine_video = nn.Linear(embed_dim, dim)
 		self.affine_v = nn.Linear(dim, 49, bias=False)
 		self.affine_g = nn.Linear(dim, 49, bias=False)
 		self.affine_h = nn.Linear(49, 1, bias=False)
-		self.affine_feat = nn.Linear(512, dim)
+		# self.affine_feat = nn.Linear(512, dim)
+		self.affine_feat = nn.Linear(embed_dim, dim)
 		self.relu = nn.ReLU()
 
 	def forward(self, video, audio):
