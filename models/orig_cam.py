@@ -14,26 +14,23 @@ from copy import deepcopy
 from .audguide_att import BottomUpExtract
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, dim_model, dropout_p, max_len):
-        super().__init__()
-        
-        self.dropout = nn.Dropout(dropout_p)
- 
-        # Encoding - From formula
-        pos_encoding = torch.zeros(max_len, dim_model)
-        positions_list = torch.arange(0, max_len, dtype=torch.float).view(-1, 1) # 0, 1, 2, 3, 4, 5
-        division_term = torch.exp(torch.arange(0, dim_model, 2).float() * (-math.log(10000.0)) / dim_model) # 1000^(2i/dim_model)
- 
-        pos_encoding[:, 0::2] = torch.sin(positions_list * division_term)
-        pos_encoding[:, 1::2] = torch.cos(positions_list * division_term)
- 
-        # Saving buffer (same as parameter without gradients needed)
-        pos_encoding = pos_encoding.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pos_encoding", pos_encoding)
- 
-    def forward(self, token_embedding: torch.tensor) -> torch.tensor:
-        # Residual connection + pos encoding
-        return self.dropout(token_embedding + self.pos_encoding[:token_embedding.size(0), :])
+    def __init__(self, d_model, dropout=0.6, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        # Positional Encoding 계산
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
 
 
 class Global_Attention_Transformer(nn.Module):
@@ -51,17 +48,26 @@ class Global_Attention_Transformer(nn.Module):
         enc_layer2 = nn.TransformerEncoderLayer(d_model=dim, nhead=n_head)
         self.encoder2 = nn.TransformerEncoder(enc_layer2, num_layers=n_layer)        
 
+        self._reset_parameters()
+
+    def _reset_parameters(self):
+        nn.init.xavier_uniform_(self.layer.weight)
+        if self.layer.bias is not None:
+            nn.init.zeros_(self.layer.bias)        
+
     def forward(self, data, memory=None):
         if not memory==None:
             data4 = torch.cat((memory, data), dim=-1)
             data3 = self.layer(data4)
             data2 = self.pos_enc(data3)
             data1 = self.encoder2(data2)
+
+            return data1
         else:
             data2 = self.pos_enc(data)
             data1 = self.encoder1(data2)
 
-        return data1
+            return data1
 
 
 class GAT_LSTM_CAM(nn.Module):
@@ -118,31 +124,26 @@ class GAT_LSTM_CAM(nn.Module):
 
 
     def forward(self, f1_norm, f2_norm, global_vid=None, global_aud=None):
-        video = F.normalize(f2_norm, dim=-1)
-        audio = F.normalize(f1_norm, dim=-1)
+        video = F.normalize(f2_norm, dim=-1, eps=1e-6)
+        audio = F.normalize(f1_norm, dim=-1, eps=1e-6)
 
         # Tried with LSTMs also
         audio = self.audio_extract(audio)
         video = self.video_attn(video, audio)
         video = self.video_extract(video)
 
-        global_vid = self.video_GAT(video, global_vid)
-        global_aud = self.audio_GAT(audio, global_aud)
+        gat_vid = self.video_GAT(video, global_vid)
+        gat_aud = self.audio_GAT(audio, global_aud)
 
-        print("video : ", video.shape)
-        print("global_vid : ", global_vid.shape)
-        print("audio : ", audio.shape)
-        print("global_aud : ", global_aud.shape)
-
-        gloabl_video = torch.cat((video, global_vid), dim=-1)
-        gloabl_audio = torch.cat((audio, global_aud), dim=-1)
+        gloabl_video = torch.cat((video, gat_vid), dim=-1)
+        gloabl_audio = torch.cat((audio, gat_aud), dim=-1)
         
-        gloabl_video, gloabl_audio = self.coattn(gloabl_video, gloabl_audio)
+        gloabl_video_attn, gloabl_audio_attn = self.coattn(gloabl_video, gloabl_audio)
 
-        audiovisualfeatures = torch.cat((gloabl_video, gloabl_audio), -1)
+        audiovisualfeatures = torch.cat((gloabl_video_attn, gloabl_audio_attn), -1)
         
         audiovisualfeatures = self.Joint(audiovisualfeatures)
         vouts = self.vregressor(audiovisualfeatures) #.transpose(0,1))
         aouts = self.aregressor(audiovisualfeatures) #.transpose(0,1))
 
-        return vouts.squeeze(2), aouts.squeeze(2), global_vid, global_aud  #final_aud_feat.transpose(1,2), final_vis_feat.transpose(1,2)
+        return vouts.squeeze(2), aouts.squeeze(2), global_vid, global_aud  

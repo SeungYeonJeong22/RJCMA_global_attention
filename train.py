@@ -88,8 +88,7 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 	#torch.cuda.synchronize()
 	#t1 = time.time()
 	n = 0
-	if time_chk_path:
-		time_chk_file = os.path.join(time_chk_path, "time_chk.txt")
+	global_vid_fts, global_aud_fts= None, None
   
 
 	for batch_idx, (visualdata, audiodata, labels_V, labels_A) in tqdm(enumerate(train_loader),
@@ -102,7 +101,7 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 		visualdata = visualdata.cuda()#permute(0,4,1,2,3).cuda()
   
 		st2 = time.time()
-
+		# if batch_idx==3:break
 
 		with torch.cuda.amp.autocast():
 			with torch.no_grad():
@@ -111,35 +110,14 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 				aud_feats = torch.empty((b, seq_t, 512), dtype=visualdata.dtype, device = visualdata.device)
 
 				for i in range(visualdata.shape[0]):
-					st1 = time.time()
 					aud_feat, visualfeat, _ = model(audiodata[i,:,:,:], visualdata[i, :, :, :,:,:])
-					ed1 = time.time()
-
-					pre_trained_model_time = ed1 - st1
-					if time_chk_path:
-						with open(time_chk_file, 'a') as f:
-							f.write(f"Time pre_trained_model: {pre_trained_model_time}\n")
 					# visual_feats[i,:,:] = visualfeat
 					visual_feats[i,:,:] = visualfeat.view(seq_t, -1)
 					aud_feats[i,:,:] = aud_feat
 
-			st2 = time.time()
-			if batch_idx==0:
-				audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats)
-			else:
-				audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats, global_vid_fts, global_aud_fts)
-			ed2 = time.time()
-   
-			time_cam_model= ed2 - st2
-			if time_chk_path:
-				with open(time_chk_file, 'a') as f:
-					f.write(f"Time cam model: {time_cam_model}\n")
-					f.write(f"Epoch: {epoch}\n")
-					f.write(f"batch_idx: {batch_idx}\n")
-					f.write("----"*20)
-					f.write("\n")
-				f.close()
 
+			audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats, global_vid_fts, global_aud_fts)
+   
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])
 			vtargets = labels_V.view(-1, labels_V.shape[0]*labels_V.shape[1]).cuda()
@@ -156,8 +134,9 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 		# scaler.step(optimizer)
 		# scaler.update()
 
-		final_loss.backward(retain_graph=True)
-		optimizer.step()
+		with torch.autograd.set_detect_anomaly(True):
+			final_loss.backward(retain_graph=True)
+			optimizer.step()
 		n = n + 1
 
 		vout = vout + voutputs.squeeze(0).detach().cpu().tolist()

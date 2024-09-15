@@ -12,7 +12,7 @@ class LSTM(nn.Module):
         self.rnn = nn.LSTM(embed_size, self.rnn_dim, num_layers=num_layers, dropout=dropout,
                            bidirectional=True, batch_first=True)
         self.residual_embeddings = residual_embeddings
-        self.init_hidden = nn.Parameter(nn.init.xavier_uniform_(torch.empty(2 * 2 * num_layers, self.rnn_dim)))
+        self.init_hidden = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(2 * 2 * num_layers, self.rnn_dim)))
         self.num_layers = num_layers
 
     def forward(self, inputs):

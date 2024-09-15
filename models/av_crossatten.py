@@ -11,12 +11,12 @@ class NormalSubLayer(nn.Module):
         self.linears = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(dim1 + dim2, dim1),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Dropout(p=dropout),
             ),
             nn.Sequential(
                 nn.Linear(dim1 + dim2, dim2),
-                nn.ReLU(inplace=True),
+                nn.ReLU(inplace=False),
                 nn.Dropout(p=dropout),
             )
         ])

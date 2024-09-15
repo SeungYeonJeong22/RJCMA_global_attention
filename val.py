@@ -66,6 +66,8 @@ def validate(val_loader, model, criterion, epoch, cam):
 	label_v = dict()
 	#files_dict = {}
 	count = 0
+	global_vid_fts, global_aud_fts= None, None
+	
 	for batch_idx, (visualdata, audiodata, frame_ids, videos, vid_lengths, labelsV, labelsA) in tqdm(enumerate(val_loader),
 														 total=len(val_loader), position=0, leave=True):
 		audiodata = audiodata.cuda()#.unsqueeze(2)
@@ -80,9 +82,7 @@ def validate(val_loader, model, criterion, epoch, cam):
 				visual_feats[i,:,:] = visualfeat
 				aud_feats[i,:,:] = audio_feat
 
-			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
-			# print("val audiovisual_vouts : ", audiovisual_vouts.shape)
-			# print("val audiovisual_aouts : ", audiovisual_aouts.shape)
+			audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats, global_vid_fts, global_aud_fts)
 
 			##### 추가 #####
 			val_voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
