@@ -150,8 +150,8 @@ def validate(val_loader, model, criterion, epoch, cam):
 			vtar.append(tars_v[i])
 			atar.append(tars_a[i])
 
-	accV = ccc(np.array(vout), np.array(vtar))
-	accA = ccc(np.array(aout), np.array(atar))
-	print(accV)
-	print(accA)
-	return accV, accA, final_loss
+	cccV = ccc(np.array(vout), np.array(vtar))
+	cccA = ccc(np.array(aout), np.array(atar))
+	print("Valence CCC: ", cccV)
+	print("Arousal CCC: ", cccA)
+	return cccV, cccA, final_loss

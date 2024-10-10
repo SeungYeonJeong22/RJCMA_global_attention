@@ -42,11 +42,14 @@ class Global_Attention_Transformer(nn.Module):
         
         self.pos_enc = PositionalEncoding(dim, dropout, seq_length)
 
-        enc_layer1 = nn.TransformerEncoderLayer(d_model=dim, nhead=n_head)
-        self.encoder1 = nn.TransformerEncoder(enc_layer1, num_layers=n_layer)
+        enc_layer = nn.TransformerEncoderLayer(d_model=dim, nhead=n_head)
+        self.encoder = nn.TransformerEncoder(enc_layer, num_layers=n_layer)
 
-        enc_layer2 = nn.TransformerEncoderLayer(d_model=dim, nhead=n_head)
-        self.encoder2 = nn.TransformerEncoder(enc_layer2, num_layers=n_layer)        
+        # enc_layer1 = nn.TransformerEncoderLayer(d_model=dim, nhead=n_head)
+        # self.encoder1 = nn.TransformerEncoder(enc_layer1, num_layers=n_layer)
+
+        # enc_layer2 = nn.TransformerEncoderLayer(d_model=dim, nhead=n_head)
+        # self.encoder2 = nn.TransformerEncoder(enc_layer2, num_layers=n_layer)        
 
         self._reset_parameters()
 
@@ -60,42 +63,48 @@ class Global_Attention_Transformer(nn.Module):
             data4 = torch.cat((memory, data), dim=-1)
             data3 = self.layer(data4)
             data2 = self.pos_enc(data3)
-            data1 = self.encoder2(data2)
+            data1 = self.encoder(data2)
+            # data1 = self.encoder2(data2)
 
-            return data1
+            # return data1
         else:
             data2 = self.pos_enc(data)
-            data1 = self.encoder1(data2)
+            data1 = self.encoder(data2)
+            # data1 = self.encoder1(data2)
 
-            return data1
+        return data1
 
 
 class GAT_LSTM_CAM(nn.Module):
     def __init__(self):
         super(GAT_LSTM_CAM, self).__init__()
-        # self.coattn = DCNLayer(512, 512, 2, 0.6)
-        self.coattn = DCNLayer(512, 512, 2, 0.6) # 각 모달리티 당 기존 512 + GAT 512 (vid, aud)
+        self.coattn = DCNLayer(1024, 1024, 2, 0.6) # 각 모달리티 당 기존 512 + GAT 512 (vid, aud)
 
-        self.video_attn = BottomUpExtract(256, 256)
-        self.audio_extract = LSTM(512, 256, 2, 0.1, residual_embeddings=True)
-        self.video_extract = LSTM(256, 256, 2, 0.1, residual_embeddings=True)
+        # self.video_attn = BottomUpExtract(256, 256)
+        self.video_attn = BottomUpExtract(512, 512)
+        # self.audio_extract = LSTM(512, 256, 2, 0.1, residual_embeddings=True)
+        # self.video_extract = LSTM(256, 256, 2, 0.1, residual_embeddings=True)
+        self.audio_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True)
+        self.video_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True)
 
-        self.video_GAT = Global_Attention_Transformer()
-        self.audio_GAT = Global_Attention_Transformer()
+        self.video_GAT = Global_Attention_Transformer(dim=512)
+        self.audio_GAT = Global_Attention_Transformer(dim=512)
 
-        self.vregressor = nn.Sequential(nn.Linear(512, 128),
+        # self.vregressor = nn.Sequential(nn.Linear(512, 128),
+        self.vregressor = nn.Sequential(nn.Linear(1024, 128),
                                         nn.ReLU(),
                                      nn.Dropout(0.6),
                                  nn.Linear(128, 1))
 
 
-        self.aregressor = nn.Sequential(nn.Linear(512, 128),
+        # self.aregressor = nn.Sequential(nn.Linear(512, 128),
+        self.aregressor = nn.Sequential(nn.Linear(1024, 128),
                                         nn.ReLU(),
                                      nn.Dropout(0.6),
                                  nn.Linear(128, 1))
         
-        # self.Joint = LSTM(1024, 512, 2, dropout=0, residual_embeddings=True)
-        self.Joint = LSTM(1024, 512, 2, dropout=0, residual_embeddings=True)        
+        # self.Joint = LSTM(1024, 512, 2, dropout=0, residual_embeddings=True)        
+        self.Joint = LSTM(2048, 1024, 2, dropout=0, residual_embeddings=True)        
         
         self.init_weights()
 
@@ -146,4 +155,4 @@ class GAT_LSTM_CAM(nn.Module):
         vouts = self.vregressor(audiovisualfeatures) #.transpose(0,1))
         aouts = self.aregressor(audiovisualfeatures) #.transpose(0,1))
 
-        return vouts.squeeze(2), aouts.squeeze(2), global_vid, global_aud  
+        return vouts.squeeze(2), aouts.squeeze(2), global_vid, global_aud

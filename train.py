@@ -46,7 +46,6 @@ import subprocess
 
 torch.autograd.set_detect_anomaly(True)
 
-#import wandb
 learning_rate_decay_start = 5  # 50
 learning_rate_decay_every = 2 # 5
 learning_rate_decay_rate = 0.8 # 0.9
@@ -148,12 +147,12 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 	scheduler.step(epoch_loss / n)
 
 	if (len(vtar) > 1):
-		train_vacc = ccc(vout, vtar)
-		train_aacc = ccc(aout, atar)
+		train_vccc = ccc(vout, vtar)
+		train_accc = ccc(aout, atar)
 	else:
 		train_acc = 0
 	print("Train Accuracy")
-	print(train_vacc)
-	print(train_aacc)
+	print("Valence CCC: ", train_vccc)
+	print("Arousal CCC: ",train_accc)
  
-	return train_vacc, train_aacc, final_loss
+	return train_vccc, train_accc, final_loss

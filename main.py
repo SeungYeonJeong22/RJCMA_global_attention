@@ -45,8 +45,6 @@ args.add_argument('-t', '--time_chk', default="False", type=str,
 					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
-# args.add_argument('-cpu_seed', '--cpu_seed', default=0, type=int,
-# 					  help='cpu seed number max:4 (default: 0)')
 args.add_argument('-fm', '--fusion_model', default="gat_lstm", type=str,
 					  help='Fusion Model (default: gat_lstm)')
 
@@ -217,19 +215,6 @@ for p in model.children():
 print("CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
 print("Is CUDA available? ", torch.cuda.is_available())
 
-## Fusion model
-# # fusion_model = CAM().cuda()
-
-# fusion_model_name = args.fusion_model
-# if fusion_model_name.lower() == 'orig_jca':
-# 	fusion_model = orig_CAM()
-# elif fusion_model_name.lower() == "orig_lstm":
-#     fusion_model = orig_LSTM_CAM()
-# elif fusion_model_name.lower() == "jca":
-#     fusion_model = CAM()
-# elif fusion_model_name.lower() == "lstm":
-#     fusion_model = LSTM_CAM()
-
 
 fusion_model_name = args.fusion_model
 fusion_model = GAT_LSTM_CAM()
@@ -358,17 +343,7 @@ if is_time_chk:
 		os.makedirs(time_chk_path)
 else:
     time_chk_path = None
-    
-# def set_worker_cpu_affinity(worker_id):
-#     global args
-#     cpu_seed = args.cpu_seed
-#     set_cpu_cnt=16 # change this
-    
-#     pid = os.getpid()
-#     cpu_cnt = os.cpu_count() - (cpu_seed * set_cpu_cnt)
-    
-#     core_id = set(i for i in range(cpu_cnt, cpu_cnt-set_cpu_cnt+1, -1))
-#     os.sched_setaffinity(pid, core_id)
+
 
 if flag == "Training":
 	print("Train Data")
@@ -379,7 +354,6 @@ if flag == "Training":
 	trainloader = torch.utils.data.DataLoader(
 					traindataset, collate_fn=TrainPadSequence(),
       				**configuration['train_params']['loader_params'])
-      				# **configuration['train_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
 
 	print("Val Data")
 	valdataset = ImageList_val(root=configuration['dataset_rootpath'], fileList=valid_set, labelPath=dataset_labelpath,
@@ -389,7 +363,6 @@ if flag == "Training":
 	valloader = torch.utils.data.DataLoader(
 					valdataset, collate_fn=ValPadSequence(),
      				**configuration['val_params']['loader_params'])
-     				# **configuration['val_params']['loader_params'], worker_init_fn=set_worker_cpu_affinity)
 					 
 	print("Number of Train samples:" + str(len(traindataset)))
 	print("Number of Val samples:" + str(len(valdataset)))
