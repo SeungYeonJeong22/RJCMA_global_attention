@@ -51,16 +51,11 @@ learning_rate_decay_every = 2 # 5
 learning_rate_decay_rate = 0.8 # 0.9
 total_epoch = 30
 lr = 0.0001
-scaler = torch.cuda.amp.GradScaler()
+scaler = torch.cuda.amp.GradScaler(init_scale=1024, growth_interval=2000)
 
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, time_chk_path):
 	print('\nEpoch: %d' % epoch)
 	global Train_acc
-	#wandb.watch(audiovisual_model, log_freq=100)
-	#wandb.watch(cam, log_freq=100)
-
-	# switch to train mode
-	#audiovisual_model.train()
 	model.eval()
 	cam.train()
 
@@ -115,7 +110,7 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 					aud_feats[i,:,:] = aud_feat
 
 
-			audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats, global_vid_fts, global_aud_fts)
+			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
    
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])
@@ -129,14 +124,16 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
    
 			epoch_loss += final_loss.cpu().data.numpy()
 
-		# scaler.scale(final_loss).backward(retain_graph=True)
-		# scaler.step(optimizer)
-		# scaler.update()
+		torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-		with torch.autograd.set_detect_anomaly(True):
-			final_loss.backward(retain_graph=True)
-			optimizer.step()
-		n = n + 1
+		scaler.scale(final_loss).backward()
+		scaler.step(optimizer)
+		scaler.update()
+
+		# with torch.autograd.set_detect_anomaly(True):
+		# 	final_loss.backward(retain_graph=True)
+		# 	optimizer.step()
+		# n = n + 1
 
 		vout = vout + voutputs.squeeze(0).detach().cpu().tolist()
 		vtar = vtar + vtargets.squeeze(0).detach().cpu().tolist()

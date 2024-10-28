@@ -16,16 +16,39 @@ import gc
 import time
 import psutil
 
-
 def get_filename(n):
 	filename, ext = os.path.splitext(os.path.basename(n))
 	return filename
 
 # def default_seq_reader(videoslist, label_path, win_length, stride, dilation, wavs_list):
 def create_jca_seq_data(videoslist, label_path, win_length, stride, dilation, wavs_list):
+	'''
+	오디오 데이터에 대해서는 _left, _right가 어차피 같은 소리니까 제거해서 파일 접근
+
+	sequnece 길이: 512
+	sub-sequence: 16개의 서브 시퀀스로 이루어지며, 최대 32개의 프레임으로 이루어지게 됨 (16 * 32 == 512)
+	multi window -> ((16 * n) * (32 / n) == 512)
+	clip: 16개로 나뉜 서브 시퀀스 내에서 선택되는 8개의 프레임
+
+	샘플링 방식:
+	서브시퀀스별로 8개의 프레임을 선택. 프레임의 개수에 따라 샘플링 방식이 달라짐:
+	- 서브시퀀스에 프레임이 32개 -> 4개씩 건너뛰어 8개의 프레임을 선택 (::4)
+	- 서브시퀀스에 프레임이 24개 이상 32개 미만 -> 3개씩 건너뛰어 8개의 프레임을 선택 (::3)
+	- 서브시퀀스에 프레임이 16개 이상 24개 미만 -> 2개씩 건너뛰어 8개의 프레임을 선택 (::2)
+	- 서브시퀀스에 프레임이  8개 이상 16개 미만 -> 마지막 8개의 프레임을 그대로 선택
+	- 서브시퀀스에 프레임이  8개 미만이면, 부족한 프레임을 마지막 프레임으로 복사하여 8개 보충
+
+	시퀀스 간의 이동을 처리:
+	- avail_seq_length가 512를 초과하면, 시퀀스가 잘못 생성된 경우를 의미하므로 “Wrong Sequence” 출력(비정상적으로 큰 시퀀스는 오류)
+	- counter: 시퀀스가 32개의 서브시퀀스로 나누어진 후 몇 번째 서브시퀀스를 처리 중인지 확인하기 위함. 총 16개의 서브시퀀스를 만들면 한 번의 시퀀스가 완성됩니다.	
+	- counter가 31을 넘으면, 480 프레임 만큼 시퀀스를 이동. 즉, 시퀀스가 480 + shift_length 프레임 만큼 앞으로 이동 후, start와 end가 재설정. (뒤의 모든 프레임을 보기 위함)
+	- counter가 31 이하일 경우, shift_length만큼만 시퀀스를 이동 후, 시퀀스의 시작과 끝을 재설정. (총 32개를 맞추기 위함, collate_fn이라고 생각하면 될듯)
+	'''
 	shift_length = stride #length-1
+	# sub_seq_num * sub_seq_len = 512 (한번의 배치에서 보고자 하는 최대 프레임 개수(시퀀스 길이))
+	sub_seq_num = 16
+	sub_seq_len = 32
 	sequences = []
-	# csv_data_list = os.listdir(videoslist)
 	csv_data_list = videoslist
 	skip_vids = ['313.csv', '212.csv', '303.csv', '171.csv', '40-30-1280x720.csv', '286.csv', '270.csv', '234.csv', '239.csv', '266.csv']
 
@@ -73,17 +96,18 @@ def create_jca_seq_data(videoslist, label_path, win_length, stride, dilation, wa
 		counter = 0
 		result = []
 		while end < length + 481:
-			avail_seq_length = end -start
+			avail_seq_length = end - start
 			count = 15
 			num_samples = 0
 			vis_subsequnces = []
 			aud_subsequnces = []
    
-			for i in range(16):
-				sub_indices = np.where((frameid_array>=(start+(i*32))+1) & (frameid_array<=(end -(count*32))))[0]
-				wav_file = os.path.join(wav_file_path, str(end -(count*32))) +'.wav'
-				if (end -(count*32)) <= length:
-					result.append(end -(count*32))
+			for i in range(sub_seq_num):
+				sub_indices = np.where((frameid_array>=(start+(i*sub_seq_len))+1) & (frameid_array<=(end -(count*sub_seq_len))))[0]
+				wav_file = os.path.join(wav_file_path, str(end -(count*sub_seq_len))) +'.wav'
+				if (end -(count*sub_seq_len)) <= length:
+					result.append(end -(count*sub_seq_len))
+					# 프레임 8개(clip) 뽑기
 					if len(sub_indices)>=8 and len(sub_indices)<16:
 						subseq_indices = sub_indices[-8:]
 						vis_subsequnces.append(vid[subseq_indices])
@@ -93,12 +117,12 @@ def create_jca_seq_data(videoslist, label_path, win_length, stride, dilation, wa
 						subseq_indices = subseq_indices[-8:]
 						vis_subsequnces.append(vid[subseq_indices])
 						aud_subsequnces.append(wav_file)
-					elif len(sub_indices)>=24 and len(sub_indices)<32:
+					elif len(sub_indices)>=24 and len(sub_indices)<sub_seq_len:
 						subseq_indices = np.flip(np.flip(sub_indices)[::3])
 						subseq_indices = subseq_indices[-8:]
 						vis_subsequnces.append(vid[subseq_indices])
 						aud_subsequnces.append(wav_file)
-					elif len(sub_indices) == 32:
+					elif len(sub_indices) == sub_seq_len:
 						subseq_indices = np.flip(np.flip(sub_indices)[::4])
 						vis_subsequnces.append(vid[subseq_indices])
 						aud_subsequnces.append(wav_file)
@@ -109,12 +133,11 @@ def create_jca_seq_data(videoslist, label_path, win_length, stride, dilation, wa
 						aud_subsequnces.append(wav_file)
 				count = count - 1
 
-			start_frame_id = start +1
-
 			if len(vis_subsequnces) == 16:
 				sequences.append([vis_subsequnces, aud_subsequnces])
 			if avail_seq_length>512:
 				print("Wrong Sequence")
+			
 			counter = counter + 1
 			if counter > 31:
 				end = end + 480 + shift_length
@@ -178,7 +201,7 @@ class ImageList(data.Dataset):
 	def __getitem__(self, index):
 		seq_path, wav_file = self.sequence_list[index]
 		st1 = time.time()
-		seq, label_V, label_A = self.load_vis_data(self.root, seq_path, self.flag, self.subseq_length)
+		seq, label_V, label_A = self.load_vis_data(self.root, seq_path, self.flag)
 		ed1 = time.time()
 		st2 = time.time()
 		aud_data = self.load_aud_data(wav_file, self.num_subseqs, self.flag)
@@ -211,7 +234,7 @@ class ImageList(data.Dataset):
 	def __len__(self):
 		return len(self.sequence_list)
 
-	def load_vis_data(self, root, SeqPath, flag, subseq_len):
+	def load_vis_data(self, root, SeqPath, flag):
 		clip_transform = ComposeWithInvert([NumpyToTensor(),
 												 Normalize(mean=[0.43216, 0.394666, 0.37645],
 														   std=[0.22803, 0.22145, 0.216989])])
@@ -220,13 +243,8 @@ class ImageList(data.Dataset):
 										   videotransforms.RandomHorizontalFlip()])
 		else:
 			data_transforms=transforms.Compose([videotransforms.CenterCrop(224)])
-		output = []
-		subseq_inputs = []
-		subseq_labels = []
 		labV = []
 		labA = []
-		frame_ids = []
-		seq_length = math.ceil(self.win_length / self.dilation)
 		seqs = []
 		for clip in SeqPath:
 			images = np.zeros((8, 112, 112, 3), dtype=np.uint8)

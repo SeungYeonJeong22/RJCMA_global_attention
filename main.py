@@ -17,7 +17,8 @@ import utils
 import matplotlib.pyplot as plt
 from utils.parser import parse_configuration
 import numpy as np
-from models.orig_cam import GAT_LSTM_CAM
+# from models.orig_cam import GAT_LSTM_CAM
+from models.orig_cam import LSTM_CAM as Custom_CAModel
 from models.tsav import TwoStreamAuralVisualModel
 import sys
 from datasets.dataset_new import ImageList
@@ -45,8 +46,8 @@ args.add_argument('-t', '--time_chk', default="False", type=str,
 					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
-args.add_argument('-fm', '--fusion_model', default="gat_lstm", type=str,
-					  help='Fusion Model (default: gat_lstm)')
+args.add_argument('-fm', '--fusion_model', default="transformer", type=str,
+					  help='Fusion Model (default: transformer)')
 
 args.add_argument('-r', '--resume', default=0, type=int,
 					  help='resume (default: None)')
@@ -217,7 +218,7 @@ print("Is CUDA available? ", torch.cuda.is_available())
 
 
 fusion_model_name = args.fusion_model
-fusion_model = GAT_LSTM_CAM()
+fusion_model = Custom_CAModel()
 
 print_model_name = fusion_model.__class__.__name__
 print("Fusion Model : ", print_model_name)

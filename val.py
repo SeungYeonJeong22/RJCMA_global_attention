@@ -82,7 +82,7 @@ def validate(val_loader, model, criterion, epoch, cam):
 				visual_feats[i,:,:] = visualfeat
 				aud_feats[i,:,:] = audio_feat
 
-			audiovisual_vouts,audiovisual_aouts, global_vid_fts, global_aud_fts = cam(aud_feats, visual_feats, global_vid_fts, global_aud_fts)
+			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
 
 			##### 추가 #####
 			val_voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
@@ -131,7 +131,7 @@ def validate(val_loader, model, criterion, epoch, cam):
 							label_a[vid][frameid-1] = labA
 							label_v[vid][frameid-1] = labV
        
-		# if batch_idx==20:break
+		# if batch_idx==3:break
        
 
 	for key in pred_a.keys():

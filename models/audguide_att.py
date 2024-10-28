@@ -18,8 +18,6 @@ class BottomUpExtract(nn.Module):
 
 # audio-guided attention
 class PositionAttn(nn.Module):
-	# 
-
 	def __init__(self, embed_dim, dim):
 		super(PositionAttn, self).__init__()
 		self.embed_dim = embed_dim # 원래 없었음 / 512 -> self.embed_dim으로 변환
