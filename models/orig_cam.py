@@ -86,7 +86,7 @@ class LSTM_CAM(nn.Module):
         self.coattn = DCNLayer(512, 512, 1, 0.6)
         self.avga = AVGA(512, 512)
 
-        self.MWT = MWTF(feature_dim=512, temporal_window_lengths=[4,8,16])
+        self.mw_lstm = MWTF(feature_dim=512, temporal_window_list=[4,8,16])
 
         self.audio_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True) # output: (batch, sequence, features)
         self.video_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True) # output: (batch, sequence, features)
@@ -134,9 +134,9 @@ class LSTM_CAM(nn.Module):
         video = F.normalize(f2_norm, dim=-1)
         audio = F.normalize(f1_norm, dim=-1)
 
-        audio = self.MWT(audio)
+        audio = self.mw_lstm(audio)
         video = self.avga(video, audio)
-        video = self.MWT(video)
+        video = self.mw_lstm(video)
         
         # # Tried with LSTMs also
         # audio = self.audio_extract(audio)
