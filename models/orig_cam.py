@@ -138,10 +138,10 @@ class LSTM_CAM(nn.Module):
         video = self.avga(video, audio)
         video = self.mw_lstm(video)
         
-        # # Tried with LSTMs also
-        # audio = self.audio_extract(audio)
-        # video = self.video_attn(video, audio)
-        # video = self.video_extract(video)
+        # Tried with LSTMs also
+        audio = self.audio_extract(audio)
+        video = self.avga(video, audio)
+        video = self.video_extract(video)
 
         video, audio = self.coattn(video, audio)
 

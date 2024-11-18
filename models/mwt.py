@@ -23,11 +23,11 @@ class MultiDomainAttention(nn.Module):
         K = self.Wk(F.normalize(F_block))
         V = self.Wv(F.normalize(F_block))
         
-        beta_t = torch.bmm(Q, K.transpose(1, 2)) / (self.feature_dim ** 0.5)  # Shape: [batch_size, temporal_window, temporal_window]
+        beta_t = torch.bmm(Q, K.transpose(1, 2)) / (self.feature_dim ** 0.5)  # [batch_size, temporal_window, temporal_window]
 
         A_t = F.softmax(beta_t, dim=1)  # Temporal attention map
         
-        beta_f = torch.bmm(K.transpose(1, 2), Q) / (self.temporal_window ** 0.5)  # Shape: [batch_size, feature_dim, feature_dim]
+        beta_f = torch.bmm(K.transpose(1, 2), Q) / (self.temporal_window ** 0.5)  # [batch_size, feature_dim, feature_dim]
 
         A_f = F.softmax(beta_f, dim=0)  # Feature attention map
         

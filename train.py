@@ -126,14 +126,17 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 
 		torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-		scaler.scale(final_loss).backward()
-		scaler.step(optimizer)
-		scaler.update()
+		# try:
+		# 	scaler.scale(final_loss).backward()
+		# 	scaler.step(optimizer)
+		# 	scaler.update()
+		# except:
+		# 	print(f"Error raise in {batch_idx}")
 
-		# with torch.autograd.set_detect_anomaly(True):
-		# 	final_loss.backward(retain_graph=True)
-		# 	optimizer.step()
-		# n = n + 1
+		with torch.autograd.set_detect_anomaly(True):
+			final_loss.backward(retain_graph=True)
+			optimizer.step()
+		n = n + 1
 
 		vout = vout + voutputs.squeeze(0).detach().cpu().tolist()
 		vtar = vtar + vtargets.squeeze(0).detach().cpu().tolist()
