@@ -17,67 +17,46 @@ import torch.nn as nn
 import math
 import sys
 
+
 sys.path.append('./models')
 from mwt import MWTF
+from TCN import TemporalConvNet
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
+class TLAB(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(TLAB, self).__init__()
+        self.lstm = LSTM(input_dim, hidden_dim, num_layers=2, dropout=0.1, residual_embeddings=True)
+        self.tcn = TemporalConvNet(
+            num_inputs=input_dim, num_channels=[hidden_dim, hidden_dim], kernel_size=3, dropout=0.1
+        )
+        # Attention Mechanism
+        self.query_fc = nn.Linear(hidden_dim, hidden_dim)  # Q (from LSTM output)
+        self.key_fc = nn.Linear(hidden_dim, hidden_dim)    # K (from TCN output)
+        self.value_fc = nn.Linear(hidden_dim, hidden_dim)  # V (from TCN output)
+        self.attention_softmax = nn.Softmax(dim=-1)        # Softmax for Attention weights
 
-        # Create a matrix of shape (max_len, d_model)
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
-        
-        pe[:, 0::2] = torch.sin(position * div_term)  # sine for even indices
-        pe[:, 1::2] = torch.cos(position * div_term)  # cosine for odd indices
-        pe = pe.unsqueeze(0)  # Add a batch dimension
-        self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # Add positional encoding to the input
-        x = x + self.pe[:, :x.size(1)]
-        return self.dropout(x)
+        # Extract global and local features
+        lstm_feat = self.lstm(x)  # Output: (batch, seq_len, hidden_dim)
+        tcn_feat = self.tcn(x.transpose(1, 2)).transpose(1, 2)  # Output: (batch, seq_len, hidden_dim)
 
+        # Compute Q, K, V
+        Q = self.query_fc(lstm_feat)  # (batch, seq_len, hidden_dim)
+        K = self.key_fc(tcn_feat)    # (batch, seq_len, hidden_dim)
+        V = self.value_fc(tcn_feat)  # (batch, seq_len, hidden_dim)
 
-class TransformerEncoder(nn.Module):
-    def __init__(self, embed_size, num_heads, num_layers, dropout):
-        super(TransformerEncoder, self).__init__()
-        self.layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(d_model=embed_size, nhead=num_heads, dropout=dropout)
-            for _ in range(num_layers)
-        ])
-        self.norm = nn.LayerNorm(embed_size)
+        # Compute Attention weights
+        attention_scores = torch.matmul(Q, K.transpose(-1, -2))  # (batch, seq_len, seq_len)
+        attention_weights = self.attention_softmax(attention_scores)  # Normalize scores
 
-    def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        return self.norm(x)
+        # Weighted sum of V
+        attended_feat = torch.matmul(attention_weights, V)  # (batch, seq_len, hidden_dim)
 
+        # Combine attended features with global (LSTM) features
+        combined_feat = lstm_feat + attended_feat  # (batch, seq_len, hidden_dim)
 
-# class MultiWindowTrasnformer(nn.Module):
-#     def __init__(self, d_model=512, nhead=4, num_encoder_layers=4, num_decoder_layers=6, dropout=0.6):
-#         super(MultiWindowTrasnformer, self).__init__()
-#         self.avga = AVGA(512, 512)
-        
-#         self.positional_encoding = PositionalEncoding(d_model, dropout)
-#         self.audio_transformer = nn.TransformerEncoder(
-#             nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward=1024, dropout=dropout),
-#             num_layers=num_encoder_layers
-#         )
-#         self.video_transformer = nn.TransformerEncoder(
-#             nn.TransformerEncoderLayer(d_model, nhead, dim_feedforward=1024, dropout=dropout),
-#             num_layers=num_encoder_layers
-#         )
-
-#         self.vregressor = nn.Sequential(
-#             nn.Linear(d_model, 128),
-#             nn.ReLU(inplace=True),
-#             nn.Dropout(0.6),
-#             nn.Linear(128, 1)
-#         )
-
+        return combined_feat
 
 
 class LSTM_CAM(nn.Module):
@@ -86,10 +65,13 @@ class LSTM_CAM(nn.Module):
         self.coattn = DCNLayer(512, 512, 1, 0.6)
         self.avga = AVGA(512, 512)
 
-        self.mw_lstm = MWTF(feature_dim=512, temporal_window_list=[4,8,16])
+        # Audio and Video TLABs
+        self.audio_tlab = TLAB(512, 512)
+        self.video_tlab = TLAB(512, 512)
 
-        self.audio_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True) # output: (batch, sequence, features)
-        self.video_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True) # output: (batch, sequence, features)
+
+        # self.audio_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True) # output: (batch, sequence, features)
+        # self.video_extract = LSTM(512, 512, 2, 0.1, residual_embeddings=True) # output: (batch, sequence, features)
 
         self.vregressor = nn.Sequential(nn.Linear(512, 128),
                                         nn.ReLU(inplace=True),
@@ -134,14 +116,20 @@ class LSTM_CAM(nn.Module):
         video = F.normalize(f2_norm, dim=-1)
         audio = F.normalize(f1_norm, dim=-1)
 
-        audio = self.mw_lstm(audio)
-        video = self.avga(video, audio)
-        video = self.mw_lstm(video)
         
-        # Tried with LSTMs also
-        audio = self.audio_extract(audio)
+        # # Tried with LSTMs also
+        # audio_tcn = self.audio_tcn(audio)
+        # audio_lstm = self.audio_extract(audio)
+
+        audio = self.audio_tlab(audio)
+
         video = self.avga(video, audio)
-        video = self.video_extract(video)
+        
+        video = self.video_tlab(video)
+        # video_tcn = self.video_tcn(video)
+        # video_lstm = self.video_extract(video)
+
+        
 
         video, audio = self.coattn(video, audio)
 

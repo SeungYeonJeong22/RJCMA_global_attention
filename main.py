@@ -53,7 +53,7 @@ args.add_argument('-r', '--resume', default=0, type=int,
 					  help='resume (default: None)')
 args.add_argument('-resume_file', '--resume_file', default=None, type=str,
 					  help='resume file (default: None)')
-args.add_argument('-ckpt', '--check_point', default=1, type=int,
+args.add_argument('-ckpt', '--check_point', default=0, type=int,
                   help='check point bool (default : 0)')
 
 
