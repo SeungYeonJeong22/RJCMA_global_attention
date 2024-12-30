@@ -19,7 +19,6 @@ import sys
 
 
 sys.path.append('./models')
-from mwt import MWTF
 from TCN import TemporalConvNet
 
 class TLAB(nn.Module):
@@ -29,22 +28,23 @@ class TLAB(nn.Module):
         self.tcn = TemporalConvNet(
             num_inputs=input_dim, num_channels=[hidden_dim, hidden_dim], kernel_size=3, dropout=0.1
         )
-        # Attention Mechanism
-        self.query_fc = nn.Linear(hidden_dim, hidden_dim)  # Q (from LSTM output)
-        self.key_fc = nn.Linear(hidden_dim, hidden_dim)    # K (from TCN output)
-        self.value_fc = nn.Linear(hidden_dim, hidden_dim)  # V (from TCN output)
+        # Self-Attention
+        self.query_fc = nn.Linear(hidden_dim, hidden_dim)  # Q: Same input
+        self.key_fc = nn.Linear(hidden_dim, hidden_dim)    # K: Same input
+        self.value_fc = nn.Linear(hidden_dim, hidden_dim)  # V: Same input
         self.attention_softmax = nn.Softmax(dim=-1)        # Softmax for Attention weights
 
-
     def forward(self, x):
-        # Extract global and local features
         lstm_feat = self.lstm(x)  # Output: (batch, seq_len, hidden_dim)
         tcn_feat = self.tcn(x.transpose(1, 2)).transpose(1, 2)  # Output: (batch, seq_len, hidden_dim)
 
-        # Compute Q, K, V
-        Q = self.query_fc(lstm_feat)  # (batch, seq_len, hidden_dim)
-        K = self.key_fc(tcn_feat)    # (batch, seq_len, hidden_dim)
-        V = self.value_fc(tcn_feat)  # (batch, seq_len, hidden_dim)
+        # Combine LSTM and TCN features (self-attention input)
+        combined_input = lstm_feat + tcn_feat
+
+        # (batch, seq_len, hidden_dim)
+        Q = self.query_fc(combined_input) 
+        K = self.key_fc(combined_input)    
+        V = self.value_fc(combined_input)  
 
         # Compute Attention weights
         attention_scores = torch.matmul(Q, K.transpose(-1, -2))  # (batch, seq_len, seq_len)
@@ -53,15 +53,15 @@ class TLAB(nn.Module):
         # Weighted sum of V
         attended_feat = torch.matmul(attention_weights, V)  # (batch, seq_len, hidden_dim)
 
-        # Combine attended features with global (LSTM) features
-        combined_feat = lstm_feat + attended_feat  # (batch, seq_len, hidden_dim)
+        # Combine attended features with original input
+        combined_feat = combined_input + attended_feat  # (batch, seq_len, hidden_dim)
 
         return combined_feat
 
 
-class LSTM_CAM(nn.Module):
+class TLAB_CAM(nn.Module):
     def __init__(self):
-        super(LSTM_CAM, self).__init__()
+        super(TLAB_CAM, self).__init__()
         self.coattn = DCNLayer(512, 512, 1, 0.6)
         self.avga = AVGA(512, 512)
 
@@ -116,20 +116,10 @@ class LSTM_CAM(nn.Module):
         video = F.normalize(f2_norm, dim=-1)
         audio = F.normalize(f1_norm, dim=-1)
 
-        
         # # Tried with LSTMs also
-        # audio_tcn = self.audio_tcn(audio)
-        # audio_lstm = self.audio_extract(audio)
-
         audio = self.audio_tlab(audio)
-
         video = self.avga(video, audio)
-        
         video = self.video_tlab(video)
-        # video_tcn = self.video_tcn(video)
-        # video_lstm = self.video_extract(video)
-
-        
 
         video, audio = self.coattn(video, audio)
 

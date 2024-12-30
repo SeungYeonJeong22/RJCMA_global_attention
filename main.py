@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from utils.parser import parse_configuration
 import numpy as np
 # from models.orig_cam import GAT_LSTM_CAM
-from models.orig_cam import LSTM_CAM as Custom_CAModel
+from models.orig_cam import TLAB_CAM as Custom_CAModel
 from models.tsav import TwoStreamAuralVisualModel
 import sys
 from datasets.dataset_new import ImageList
@@ -46,7 +46,7 @@ args.add_argument('-t', '--time_chk', default="False", type=str,
 					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
-args.add_argument('-fm', '--fusion_model', default="transformer", type=str,
+args.add_argument('-fm', '--fusion_model', default="tlab_self", type=str,
 					  help='Fusion Model (default: transformer)')
 
 args.add_argument('-r', '--resume', default=0, type=int,
