@@ -46,7 +46,7 @@ args.add_argument('-t', '--time_chk', default="False", type=str,
 					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
-args.add_argument('-fm', '--fusion_model', default="tlab_self", type=str,
+args.add_argument('-fm', '--fusion_model', default="tlab", type=str,
 					  help='Fusion Model (default: transformer)')
 
 args.add_argument('-r', '--resume', default=0, type=int,

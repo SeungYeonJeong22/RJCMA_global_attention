@@ -43,6 +43,7 @@ import sys
 import math
 from losses.CCC import CCC
 import subprocess
+from models.face_feature import FaceFeatureExtractor 
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -53,7 +54,43 @@ total_epoch = 30
 lr = 0.0001
 scaler = torch.cuda.amp.GradScaler(init_scale=1024, growth_interval=2000)
 
+
+# model = onnx.load("face_emotion_recognition/models/affectnet_emotions/onnx/enet_b2_8_best.onnx")
+
+# input_tensor = model.graph.input[0]
+# input_tensor.type.tensor_type.shape.dim[2].dim_value = 112  # Height
+# input_tensor.type.tensor_type.shape.dim[3].dim_value = 112  # Width
+# onnx.save(model, "face_emotion_recognition/models/affectnet_emotions/onnx/enet_b2_8_112x112.onnx")
+
+# face_session = ort.InferenceSession("face_emotion_recognition/models/affectnet_emotions/onnx/enet_b2_8_112x112.onnx")
+# face_input_name = face_session.get_inputs()[0].name
+
+
+# def extract_face_features(seq):
+# 	"""
+# 	ONNX 모델을 사용하여 face feature 추출
+# 	"""
+# 	face_features = []
+# 	seq = seq.view(-1, seq.shape[2], seq.shape[1], 112, 112)
+# 	for clip in seq:
+# 		clip_features = []
+# 		for img in clip:
+
+# 			img = np.array(img).astype(np.float32)
+# 			img = np.expand_dims(img, axis=0)  # (1, H, W, C)
+
+# 			face_feature = face_session.run(None, {face_input_name: img})[0]
+# 			clip_features.append(torch.tensor(face_feature))
+
+# 		face_features.append(torch.stack(clip_features))
+
+# 	return torch.stack(face_features)
+
+
+
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, time_chk_path):
+	face_extractor = FaceFeatureExtractor()
+
 	print('\nEpoch: %d' % epoch)
 	global Train_acc
 	model.eval()
@@ -83,7 +120,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 	#t1 = time.time()
 	n = 0
 	global_vid_fts, global_aud_fts= None, None
-  
 
 	for batch_idx, (visualdata, audiodata, labels_V, labels_A) in tqdm(enumerate(train_loader),
 				 										 total=len(train_loader), position=0, leave=True):
@@ -105,12 +141,15 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 
 				for i in range(visualdata.shape[0]):
 					aud_feat, visualfeat, _ = model(audiodata[i,:,:,:], visualdata[i, :, :, :,:,:])
-					# visual_feats[i,:,:] = visualfeat
+					face_feat = face_extractor.extract_face_features(visualdata[i, :, :, :,:,:], device = visualdata.device)
+
 					visual_feats[i,:,:] = visualfeat.view(seq_t, -1)
 					aud_feats[i,:,:] = aud_feat
 
+					# combined_visual_feats = torch.cat((visual_feats, face_feats), dim=-1)  
 
-			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
+			# audiovisual_vouts,audiovisual_aouts = cam(aud_feats, combined_visual_feats)
+			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats, face_feat)
    
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])
