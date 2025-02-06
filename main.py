@@ -46,7 +46,7 @@ args.add_argument('-t', '--time_chk', default="False", type=str,
 					  help='Time check (default: False)')
 args.add_argument('-s', '--seed', default=0, type=int,
 					  help='random seed number (default: 0)')
-args.add_argument('-fm', '--fusion_model', default="tlab_self", type=str,
+args.add_argument('-fm', '--fusion_model', default="tlab", type=str,
 					  help='Fusion Model (default: transformer)')
 
 args.add_argument('-r', '--resume', default=0, type=int,
@@ -407,6 +407,7 @@ if args.resume == 0:
 	init_df = pd.DataFrame(columns=columns)
 	csv_name = f'{result_save_path}/{init_time}_seed_{SEED}_{fusion_model_name.lower()}_output.csv'
 	save_model_path = f'{weight_save_path}/{init_time}_seed_{SEED}_{fusion_model_name.lower()}_model.pt'
+	print("save csv_name : ", csv_name)
 	init_df.to_csv(csv_name, index=False)
 	chkpt_path = f'{weight_save_path}/Checkpoints/{init_time}_seed_{SEED}_{fusion_model_name.lower()}_chkpt.pth'
 else:
