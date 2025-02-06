@@ -36,9 +36,11 @@ from EvaluationMetrics.cccmetric import ccc
 import math
 from losses.CCC import CCC
 #import wandb
+from models.face_feature import FaceFeatureExtractor 
 
 
 def validate(val_loader, model, criterion, epoch, cam):
+	face_extractor = FaceFeatureExtractor()
 	# switch to evaluate mode
 	global Val_acc
 	global best_Val_acc
@@ -79,10 +81,13 @@ def validate(val_loader, model, criterion, epoch, cam):
 			aud_feats = torch.empty((b, seq_t, 512), dtype=visualdata.dtype, device = visualdata.device)
 			for i in range(visualdata.shape[0]):
 				audio_feat, visualfeat, _ = model(audiodata[i,:,:,:], visualdata[i, :, :, :,:,:])
+				face_feat = face_extractor.extract_face_features(visualdata[i, :, :, :,:,:], device = visualdata.device)
+
 				visual_feats[i,:,:] = visualfeat
 				aud_feats[i,:,:] = audio_feat
 
-			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
+			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats, face_feat)
+			# audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
 
 			##### 추가 #####
 			val_voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
