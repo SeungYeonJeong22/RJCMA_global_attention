@@ -36,11 +36,9 @@ from EvaluationMetrics.cccmetric import ccc
 import math
 from losses.CCC import CCC
 #import wandb
-from models.face_feature import FaceFeatureExtractor 
 
 
 def validate(val_loader, model, criterion, epoch, cam):
-	face_extractor = FaceFeatureExtractor()
 	# switch to evaluate mode
 	global Val_acc
 	global best_Val_acc

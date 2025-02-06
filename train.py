@@ -43,7 +43,6 @@ import sys
 import math
 from losses.CCC import CCC
 import subprocess
-from models.face_feature import FaceFeatureExtractor 
 
 torch.autograd.set_detect_anomaly(True)
 
