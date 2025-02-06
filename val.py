@@ -83,7 +83,7 @@ def validate(val_loader, model, criterion, epoch, cam):
 				visual_feats[i,:,:] = visualfeat
 				aud_feats[i,:,:] = audio_feat
 
-			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats, face_feat)
+			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
 			# audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
 
 			##### 추가 #####

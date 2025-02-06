@@ -145,7 +145,7 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 					# combined_visual_feats = torch.cat((visual_feats, face_feats), dim=-1)  
 
 			# audiovisual_vouts,audiovisual_aouts = cam(aud_feats, combined_visual_feats)
-			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats, face_feat)
+			audiovisual_vouts,audiovisual_aouts = cam(aud_feats, visual_feats)
    
 			voutputs = audiovisual_vouts.view(-1, audiovisual_vouts.shape[0]*audiovisual_vouts.shape[1])
 			aoutputs = audiovisual_aouts.view(-1, audiovisual_aouts.shape[0]*audiovisual_aouts.shape[1])
