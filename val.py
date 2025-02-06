@@ -79,7 +79,6 @@ def validate(val_loader, model, criterion, epoch, cam):
 			aud_feats = torch.empty((b, seq_t, 512), dtype=visualdata.dtype, device = visualdata.device)
 			for i in range(visualdata.shape[0]):
 				audio_feat, visualfeat, _ = model(audiodata[i,:,:,:], visualdata[i, :, :, :,:,:])
-				face_feat = face_extractor.extract_face_features(visualdata[i, :, :, :,:,:], device = visualdata.device)
 
 				visual_feats[i,:,:] = visualfeat
 				aud_feats[i,:,:] = audio_feat

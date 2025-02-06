@@ -88,8 +88,6 @@ scaler = torch.cuda.amp.GradScaler(init_scale=1024, growth_interval=2000)
 
 
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, time_chk_path):
-	face_extractor = FaceFeatureExtractor()
-
 	print('\nEpoch: %d' % epoch)
 	global Train_acc
 	model.eval()
@@ -140,7 +138,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, lr, cam, 
 
 				for i in range(visualdata.shape[0]):
 					aud_feat, visualfeat, _ = model(audiodata[i,:,:,:], visualdata[i, :, :, :,:,:])
-					face_feat = face_extractor.extract_face_features(visualdata[i, :, :, :,:,:], device = visualdata.device)
 
 					visual_feats[i,:,:] = visualfeat.view(seq_t, -1)
 					aud_feats[i,:,:] = aud_feat
