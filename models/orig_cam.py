@@ -21,44 +21,8 @@ import sys
 sys.path.append('./models')
 from TCN import TemporalConvNet
 
-# class TLAB(nn.Module):
-#     def __init__(self, input_dim, hidden_dim):
-#         super(TLAB, self).__init__()
-#         self.lstm = LSTM(input_dim, hidden_dim, num_layers=2, dropout=0.3, residual_embeddings=True)
-#         self.tcn = TemporalConvNet(
-#             num_inputs=input_dim, num_channels=[hidden_dim, hidden_dim], kernel_size=3, dropout=0.3
-#         )
-
-#         # Attention
-#         self.query_fc = nn.Linear(hidden_dim, hidden_dim)  # Q: LSTM output (global information)
-#         self.key_fc = nn.Linear(hidden_dim, hidden_dim)    # K: TCN output (local information)
-#         self.value_fc = nn.Linear(hidden_dim, hidden_dim)  # V: TCN output (local information)
-#         self.attention_softmax = nn.Softmax(dim=-1)        # Softmax for Attention weights
-
-#     def forward(self, x):
-#         lstm_feat = self.lstm(x)  # Output: (batch, seq_len, hidden_dim)
-#         tcn_feat = self.tcn(x.transpose(1, 2)).transpose(1, 2)  # Output: (batch, seq_len, hidden_dim)
-
-#         # (batch, seq_len, hidden_dim)
-#         Q = self.query_fc(lstm_feat) 
-#         K = self.key_fc(tcn_feat)    
-#         V = self.value_fc(tcn_feat)  
-
-#         # Compute Attention weights
-#         attention_scores = torch.matmul(Q, K.transpose(-1, -2))  # (batch, seq_len, seq_len)
-#         attention_weights = self.attention_softmax(attention_scores)  # Normalize scores
-
-#         # Weighted sum of V
-#         attended_feat = torch.matmul(attention_weights, V)  # (batch, seq_len, hidden_dim)
-
-#         # Combine attended features with global (LSTM) features
-#         combined_feat = lstm_feat + attended_feat  # (batch, seq_len, hidden_dim)
-
-#         return combined_feat
-
-
 class TLAB(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_heads=4):
+    def __init__(self, input_dim, hidden_dim, num_heads=2):
         super(TLAB, self).__init__()
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
